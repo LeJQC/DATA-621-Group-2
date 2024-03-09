@@ -125,8 +125,7 @@ print(precision)
 
 # 6.
 
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified,
-and returns the sensitivity of the predictions. Sensitivity is also known as recall.
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
 
 
 $$Sensitivity =  \frac{TP}{TP + FN}$$ 
@@ -256,20 +255,23 @@ print(cm)
 
 ```
 
-**TO DO: Write comparisons between this value and the value in #3,6,7**
+The calculated Accuracy using the confusionMatrix function is 0.81 while the calculated accuracy using the function made in question 3 is 0.81 which shows that both functions work the same in that aspect. 
 
+The confusion matrix function also had the value of 0.7987 for sensitivity while the custom function had the value of 0.4736842 in question 6 this is a big difference in that the built in function is saying that 79.87% of the actual positive cases were correctly identified by the model while the custom function is saying that 47.37% of the actual positive cases were correctly identified by the model.
+
+The built in function had a sensitivity of 0.9596774 while the confusionMatrix function had a value of 0.8438 meaning that approximately 95.97% of the actual positive cases were correctly identified by the built-in function while  84.38% of the actual positive cases were correctly identified by the confusionMatrix function. And depending on what someone values, they would prefer the custom models results since it has a high sensitivity
 ```{r}
 specificity <- specificity(df$class, predicted_class)
 print(specificity)
-
 ```
-**TO DO: Write comparisons between this value and the value in #7**
+Again, we see that the custom function had a value of 47.37% while the specificity function had a value of 84.48%, meaning that the specificity function accurately identifies 84.48% of the positive cases while the custom function created in question 7 accurately identifies 47.37%, making the sensitivity function more favorable.
 
 ```{r}
 sensitivity <- sensitivity(df$class, predicted_class)
 print(sensitivity)
 ```
-**TO DO: Write comparisons between this value and the value in #6**
+
+In this comparison, we observed that the custom sensitivity function yielded a value of 0.8438 (84.38%), while the built-in function, done in question 6 returned a slightly lower value of 0.7986577. On the other hand, when we looked at specificity, the built-in function outperformed the custom one, achieving a higher score of 0.8448 (84.48%) compared to the custom function's 0.4737 (47.37%). This indicates that the built-in sensitivity function is more favorable as it accurately identifies a higher percentage of positive cases, contrasting with the custom function's weaker performance in this regard.
 
 # 13.
 
