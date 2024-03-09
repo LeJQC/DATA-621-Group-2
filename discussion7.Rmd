@@ -1,0 +1,26 @@
+---
+title: "discussion7"
+output: html_document
+date: "2024-03-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 8
+
+If a coin is tossed a sequence of times, what is the probability that the first head will occur after the fifth toss, given that it has not occurred in the first two tosses?
+```{r}
+# Probability of event A intersect B
+prob_A_intersect_B <- 1/8
+
+# Probability of event B
+prob_B <- 1 - 1/2 * 1/2
+
+# Probability of A given B
+prob_A_given_B <- prob_A_intersect_B / prob_B
+
+prob_A_given_B
+```
+
