@@ -2,7 +2,9 @@
 title: "DATA 621 HW 2"
 author: "Jian Quan Chen"
 date: "2024-03-04"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 # Overview
@@ -22,7 +24,7 @@ library(ROCR)
 Download the classification output data set (attached in Blackboard to the assignment).
 
 ```{r}
-df <- read_csv("https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW2/classification-output-data.csv")
+df <- read.csv("https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW2/classification-output-data.csv")
 head(df)
 ```
 
@@ -181,7 +183,7 @@ f1 <- function(df){
 # 9.
 
 Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show
-that the F1 score will always be between 0 and 1. (Hint: If 0 < 𝑎 < 1 and 0 < 𝑏 < 1 then 𝑎𝑏 < 𝑎.)
+that the F1 score will always be between 0 and 1. (Hint: If 0 < a < 1 and 0 < b < 1 then a b < a.)
 
 We determine the F1 score by considering both precision and sensitivity. As precision and sensitivity values range from 0 to 1, any computation involving values within this range will yield results within the same boundaries. Consequently, the F1 score will always fall between 0 and 1.
 
@@ -221,11 +223,13 @@ generate_ROC_curve <- function(data) {
   
   # Calculate AUC using trapezoidal rule
   for (i in 1:(nrow(roc_points) - 1)) {
-    auc <- auc + (roc_points$TPR[i] + roc_points$TPR[i + 1]) * (roc_points$FPR[i + 1] - roc_points$FPR[i]) / 2
+    auc <- auc + (roc_points$TPR[i] + roc_points$TPR[i + 1]) * 
+      (roc_points$FPR[i + 1] - roc_points$FPR[i]) / 2
   }
   
   # Plot ROC curve
-  plot(roc_points$FPR, roc_points$TPR, type = "l", col = "blue", xlab = "False Positive Rate", ylab = "True Positive Rate", main = "ROC Curve")
+  plot(roc_points$FPR, roc_points$TPR, type = "l", col = "blue", 
+       xlab = "False Positive Rate", ylab = "True Positive Rate", main = "ROC Curve")
   
   # Add diagonal line
   abline(0, 1, col = "red")
@@ -240,6 +244,27 @@ result <- generate_ROC_curve(df)
 
 #AUC value
 result$auc
+```
+
+# 11.
+
+Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+```{r message=FALSE, warning=FALSE}
+created_functions <- c(calculate_accuracy(df),
+                       calculate_error_rate(df),
+                       calculate_precision(df),
+                       func_sensitivity(df),
+                       func_specificity(df),
+                       f1(df))
+
+names(created_functions) <- c("Accuracy",
+                              "Classification Error Rate",
+                              "Precision",
+                              "Sensitivity",
+                              "Specificity",
+                              "F1 Score")
+
+knitr::kable(created_functions, col.names = "Classification Metrics")
 ```
 
 
@@ -293,8 +318,4 @@ print(paste("AUC:", auc_score))
 
 
 Using the pROC package compared to writing my own function is different  in that the pROC package made it very easy to implement the ROC curve on the data set. Also note that the AUC from the pROC package is .8503 compared to the functions  .8484
-
-
-
-
 
