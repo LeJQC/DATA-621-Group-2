@@ -1,6 +1,6 @@
 ---
 title: "DATA 621 HW 2"
-author: "Jian Quan Chen"
+author: "Tilon Bobb, Jian Quan Chen, Shamecca Marshall"
 date: "2024-03-04"
 output:
   pdf_document: default
