@@ -1,6 +1,6 @@
 ---
 title: "DATA 621 HW 3 Crime"
-author: "Jian Quan Chen"
+author: "Jian Quan Chen, Frederick Jones"
 date: "2024-03-22"
 output: html_document
 ---
@@ -70,6 +70,114 @@ df %>%
 ```
 
 # 2. Data Preparation
+
+## Fix any missing value in the data
+**Let's check if there exists a null value or NA in the dataframe. If Null is found it can be fixed using mean or median of the column in which na is found.**
+**Attach the data**
+```{r}
+training_set <- df
+test_set <- read.csv("https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/14f8d86b73472ac8f9302415a7e4c24b37052ea6/HW3/crime-evaluation-data_modified.csv")
+
+```
+
+```{r}
+print(sum(is.na(training_set)))
+print(sum(is.na(test_set)))
+```
+This shows that there no missing value in the data and thus no need to bother about the missing values. 
+
+## Modify an existing variable or create a new variable by combining the two or more variables 
+It is to be noted that the tax column contain the tax rate per $10,000 and medv contain the property value in $1000. The median tax on properties in neighborhood can be calculated by usingthese two columns. 
+$$medTax = \frac{medv*1000}{10000}*Tax$$
+or in simple it can be written as medTax = medv*Tax*1000/10000 = medv*tax/10
+
+```{r}
+training_set<- training_set|>mutate(
+  medTax = medv*tax/10
+)|>
+  relocate(medTax, .before = 10)
+test_set<- training_set|>mutate(
+  medTax = medv*tax/10
+)|>relocate(medTax, .before = 10)
+head(training_set)
+  
+```
+Now no need of the variable tax as we have median value of tax per owner occupied home.Drop the variable tax from the data.
+```{r}
+training_set<- training_set[,-9]
+test_set<- test_set[,-9]
+#head(training_set)
+#head(test_set)
+```
+
+
+## Feature scaling
+
+**Now the data can be scaled so that the all the predictors have equal effect on the response variable.**
+
+It can concluded from the summary table that the range of some variable is high like zn's range is 0-100. This range can be normalize or standardize so that the range is between  0 and 1 or -3 to 3 respectively. 
+
+To normalize a number we just divide it by the maximum value in the variable. This can be done conviniently using scale() function in R. 
+
+Note: No need to standardize the target variable, the predictor variables chas and nox because these already contain 0 and 1 or within the standardized limit.    
+```{r}
+training_set[,1:12][,c(-3, -4)] = scale(training_set[, 1:12][,c(-3, -4)])
+test_set = scale(test_set)
+head(training_set)
+```
+## 3. Build Models (Logistic regression binary models)
+The first task before writing the any model is to select the predictor variables.But the seldction of suitable predictor variable is a complex task and if we omit any predictor varible which influence the target variable, it induces a bias in the output of the model which is known as omitted-variable bias. Thus, one need to be very careful while selction of suitable predictor variable. 
+
+We can use the most correlated variables with the target variable. Using the scatterplot, it can be seen that the target variable is highly correlated with the following variables: 
+
+indus, nox, age, rad, lstat 
+
+And weakly correlated with medTax, ptratio
+
+And almost neutral with chas and highly negatively correlated with zn, dis, medv, rm.
+
+The correlation plot can be regenerated on the modified or transformed data to see the correlation among the transformed variables. 
+```{r}
+training_set %>% 
+  cor(use = "complete.obs") %>%
+  corrplot(method = "color", tl.col = "black")
+```
+The highly correlated components can be selected for the logistic regression. Therefore, we will use indus, nox, age, rad, lstat, zn, dis. It can be seen that zn is higly correlated with nox, indus, age, dis,ptratio, lstate, medv. Therefore, it will be better to leave zn and no need to include in in the regression. 
+
+```{r}
+logistic_model <-  glm(target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
+summary(logistic_model)
+```
+The p-value for the lstat is 0.4999 which is more than the critical value 0.05 thus this variable must be omited from the regression. 
+
+```{r}
+logistic_model <-  glm(target ~ indus + nox + age + rad + dis,data = training_set, family = binomial)
+summary(logistic_model)
+```
+All the probability of the coefficients are less than 0.05 thus, it can be concluded that all the coefficients are significant for the regression. 
+**Test the hypothesis with chisq-test**
+```{r}
+anova(logistic_model, test="Chisq")
+```
+The probability of dis is more than 0.05 thus the variable dis can be removed from the model and we have the logistic model. 
+```{r}
+logistic_model <-  glm(target ~ indus + nox + age + rad, data = training_set, family = binomial)
+anova(logistic_model, test="Chisq")
+```
+Now the variable age has pr(>Chi)=0.2333>0.05, thus age seems to be removable, so let's drop it from the logistic model. 
+
+```{r}
+logistic_model <-  glm(target ~ indus + nox + rad, data = training_set, family = binomial)
+anova(logistic_model, test="Chisq")
+```
+Now the all the variables have probability less than 0.05 and thus these three variables are significant for the logistic binary regression. 
+**Prediction of the based on the final model**
+```{r}
+pred_target <- predict(logistic_model, type="response", newdata =test_set)
+pred_target <- ifelse(pred_target > 0.5, 1, 0)
+pred_target[1:10]
+```
+So the prediction 
 
 
 
