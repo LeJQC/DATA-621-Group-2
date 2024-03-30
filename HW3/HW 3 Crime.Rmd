@@ -2,7 +2,9 @@
 title: "DATA 621 HW 3 Crime"
 author: "Jian Quan Chen, Frederick Jones"
 date: "2024-03-22"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 # 1. Data Exploration
@@ -11,6 +13,7 @@ output: html_document
 library(tidyverse)
 library(psych)
 library(corrplot)
+library(MASS)
 ```
 
 ```{r}
@@ -39,15 +42,15 @@ The variables are:
 -   `medv`: median value of owner-occupied homes in \$1000s
 -   `target`: whether the crime rate is above the median crime rate (1) or not (0)
 
-### Summary Table
-Using the `describe` function from the psych library, we can get the summary statistics of all the variables as shown in the table below. Something to note here is the large standard deviation with the `zn`, `age` variable compared to its range, which may be because they are proportions. Another thing that stands out is the `tax` variable. It mean, standard deviation, median, and range are much larger than the other predictor variables so we might have to do some transformation on it later on. 
+## Summary Table
+Using the `describe` function from the psych library, we can get the summary statistics of all the variables as shown in the table below. Something to note here is the large standard deviation with the `zn`, `age` variable compared to its range, which may be because they are proportions. Another thing that stands out is the `tax` variable. The mean, standard deviation, median, and range are much larger than the other predictor variables so we might have to do some transformation on it later on. 
 ```{r}
 summary_table <- describe(df)
 
 print(round(summary_table,2))
 ```
 
-### Distrubtion Plot
+## Distrubtion Plot
 Next, let's look at the distribution of the 13 variables. As expected the values of the target variable are distributed around 0 and 1. Variables such as age, chas, dis, lstat, nox, ptration, rad, and zn are skewed to the left or right. On the other hand, variables medv and rm are normally distributed. The remaining predictor variables indus and tax have a bimodal distribution curve. 
 ```{r}
 df_long <- df %>%
@@ -64,7 +67,7 @@ df_long %>%
   labs(x = element_blank(), y = element_blank())
 ```
 
-### Correlation Plot
+## Correlation Plot
 To identify the correlation between each variable we can create a correlation plot by using the corrplot library. According to the correlation plot, the variables nox (0.73), age (0.63), rad (0.63), tax (0.61), and indus (0.60) are most linearly correlated with the target variable. In addition, there is a high degree of collinearity with tax and rad (0.91) and with nox and indus (0.76). These are variables to keep in mind when we select variables for our models. 
 ```{r}
 df %>% 
@@ -72,7 +75,7 @@ df %>%
   corrplot(method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
 ```
 
-### Boxplot
+## Boxplot
 This boxplot shows the distribution and quartile ranges of the variables. We see that there are obvious outliers in chas and dis, which we may have to deal with later on. Other predictor variables such as lstat, medv, rm, and zn also have outliers, which may need to be dealth with later as well. 
 ```{r}
 df_long %>% 
@@ -122,7 +125,6 @@ test_set<- test_set[,-9]
 #head(test_set)
 ```
 
-
 ## Feature scaling
 
 **Now the data can be scaled so that the all the predictors have equal effect on the response variable.**
@@ -137,8 +139,11 @@ training_set[,1:12][,c(-3, -4)] = scale(training_set[, 1:12][,c(-3, -4)])
 test_set = scale(test_set)
 head(training_set)
 ```
-## 3. Build Models (Logistic regression binary models)
-The first task before writing the any model is to select the predictor variables.But the seldction of suitable predictor variable is a complex task and if we omit any predictor varible which influence the target variable, it induces a bias in the output of the model which is known as omitted-variable bias. Thus, one need to be very careful while selction of suitable predictor variable. 
+
+# 3. Build Models (Logistic regression binary models)
+
+## Model 1
+The first task before writing the any model is to select the predictor variables.But the selection of suitable predictor variable is a complex task and if we omit any predictor variable which influence the target variable, it induces a bias in the output of the model which is known as omitted-variable bias. Thus, one needs to be very careful while selecting a suitable predictor variable. 
 
 We can use the most correlated variables with the target variable. Using the scatterplot, it can be seen that the target variable is highly correlated with the following variables: 
 
@@ -160,7 +165,7 @@ The highly correlated components can be selected for the logistic regression. Th
 logistic_model <-  glm (target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
 summary(logistic_model)
 ```
-The p-value for the lstat is 0.4999 which is more than the critical value 0.05 thus this variable must be omited from the regression. 
+The p-value for the lstat is 0.4999 which is more than the critical value 0.05 thus this variable must be omitted from the regression. 
 
 ```{r}
 logistic_model <-  glm(target ~ indus + nox + age + rad + dis,data = training_set, family = binomial)
@@ -185,25 +190,29 @@ anova(logistic_model, test="Chisq")
 Now the all the variables have probability less than 0.05 and thus these three variables are significant for the logistic binary regression. 
 **Prediction of the based on the final model**
 ```{r}
-pred_target <- predict(logistic_model, type="response", newdata =test_set)
+pred_target <- predict(logistic_model, type="response", data=test_set)
 pred_target <- ifelse(pred_target > 0.5, 1, 0)
 pred_target[1:10]
 ```
 So the prediction 
 
+## Model 2
+For this binary logistic regression model, we are going to use all the predictor variables from the original training data set. Then we are going to use stepwise selection to remove predictors based on Akaike Information Criterion (AIC) to create an optimal model. This will be done using the `stepAIC` function from the MASS library, which will iterate over the predictors to improve the model's AIC.   
 
+```{r}
+logistic_model2 <- glm(target ~., family="binomial", data=df)
+summary(logistic_model2)
+``` 
+From this initial model with all the predictors, we can see that there are several variables that are not statistically significant such as indus, chas, rm, and lstat. This model has an AIC of 218.05. Next, lets use the stepAIC function to improve this model. 
+```{r}
+step_model <- stepAIC(logistic_model2, direction = "both", trace = FALSE)
+summary(step_model)
+```
+In this new model, the predictor variables that were not statistically significant were removed. The AIC for this new model is 215.32, which is slightly lower than the initial model (218.05), indicating that removing those predictor variables improved the fit of the model.
 
+The intercept or log-odds when predictors are zero is -37.4. As for coefficients, a one unit increase in nox(nitrogen oxide concentration) corresponds to an increase of 42.8 in the log-odds of high crime. A one unit increase in age, dis, rad, ptratio, and medv corresponds to an increase of 0.03, 0.65, 0.72, 0.32, and 0.11 in the log-odds of high crime, respectively. While a one unit increase in zn and tax results in a decrease of -0.06 and -0.007 in the log-odds of high crime. Out of all the predictors, it is strange to think that nitrogen oxides concentration had the largest influence on crime rate. How can air pollution be linked to crime? I can see the possibility that an increase in nitrogen oxide concentrations affecting physical and mental health, which can influence criminal behavior. However, this seems like a stretch and it is hard to see a correlation between the nitrogen oxide concentrations and crime rate intuitively. As for zn and tax, the two variables that corresponded to a decrease in crime, it seems practical that a crammed area with low property value will have a higher rate of crime.
 
-
-
-
-
-
-
-
-
-
-
+Although there are predictors in the model do not make sense intuitively, all the predictors are statistically significant. Also, based on AIC, this model is a better fit for the target variable than the initial model with all the predictors.
 
 
 
