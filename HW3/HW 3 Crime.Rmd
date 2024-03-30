@@ -215,13 +215,28 @@ The intercept or log-odds when predictors are zero is -37.4. As for coefficients
 Although there are predictors in the model do not make sense intuitively, all the predictors are statistically significant. Also, based on AIC, this model is a better fit for the target variable than the initial model with all the predictors.
 
 
+## MOdel 3
+
+The variables I chose for this model were picked because they seem like they could have a negative impact on crime rates in a neighborhood. The proportion of residential land zoned for large lots (zn) might say something about the neighborhood's layout and size, which could affect how much crime happens there. The weighted mean of distances to Boston employment centers (dis) could show how easy it is for people in the area to get to work. The pupil-teacher ratio by town (ptratio) might reflect how well-funded the schools are, which could be linked to the overall quality of the neighborhood. The median value of owner-occupied homes in $1000s (medv) could tell us about the wealth and stability of the people living there, which could also influence crime rates.
+
+```{r}
+logistic_model_3 <- glm(target ~ zn + dis + ptratio + medv, data = training_set, family = binomial)
+
+summary(logistic_model_3)
+```
+
+In our journey to predict property sales, we started with a model that considered every possible factor. We found that some things, like being close to job centers and air quality, really mattered, while others, like land use type and the number of rooms, didn't seem to make much of a difference. Then, we decided to simplify things. We focused on just a few key predictors: how much of the area was residential, how far it was from work, the pupil-teacher ratio, and the median home value. What surprised us was that even with fewer factors, our predictions stayed pretty accurate. The numbers tell the story too: the first model had an AIC of 218.05, while the second was at 406.93. Based on the AIC (AIC: 218.05 for model 2, AIC: 406.93 for model 3) and residual deviance metrics (Residual Deviance: 192.05 for model 2, Residual Deviance: 396.93 for model 3), it appears that model 2 is indeed performing better than model 3. The lower AIC and residual deviance values of model 2 suggest that it provides a better fit to the data and likely has higher predictive accuracy.
 
 
 
+Now, leveraging this logistic model, we'll employ stepwise variable selection to refine our model's predictive power and enhance its interpretability.
+```{r}
+step_model3 <- stepAIC(logistic_model_3, direction = "both", trace = FALSE)
+summary(step_model3)
+```
 
 
-
-
+Comparing the residual deviance values, the stepwise model with residential land proportion, distance to employment centers, and pupil-teacher ratio (step_model3) exhibits a residual deviance of 397.46. This is higher than the residual deviance of 197.32 for the previous stepwise model with additional variables (step_model). Despite the reduction in variables, the residual deviance of step_model3 is higher, suggesting that it may not fit the data as well as the previous stepwise model. Also, the AIC of 405.46 for step_model3 is  higher than the AIC of 215.32 for step_model, indicating that step_model3does not provide a better fit to the data.
 
 
 
