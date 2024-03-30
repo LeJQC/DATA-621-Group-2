@@ -171,28 +171,28 @@ training_set %>%
 The highly correlated components can be selected for the logistic regression. Therefore, we will use indus, nox, age, rad, lstat, zn, dis. It can be seen that zn is higly correlated with nox, indus, age, dis,ptratio, lstate, medv. Therefore, it will be better to leave zn and no need to include in in the regression.
 
 ```{r}
-logistic_model <-  glm (target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
-summary(logistic_model)
+logic_model <-  glm (target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
+summary(logic_model)
 ```
 
 The p-value for the lstat is 0.4999 which is more than the critical value 0.05 thus this variable must be omitted from the regression.
 
 ```{r}
-logistic_model <-  glm(target ~ indus + nox + age + rad + dis,data = training_set, family = binomial)
-summary(logistic_model)
+logistic_model1 <-  glm(target ~ indus + nox + age + rad + dis,data = training_set, family = binomial)
+summary(logistic_model1)
 ```
 
 All the probability of the coefficients are less than 0.05 thus, it can be concluded that all the coefficients are significant for the regression. **Test the hypothesis with chisq-test**
 
 ```{r}
-anova(logistic_model, test="Chisq")
+anova(logistic_model1, test="Chisq")
 ```
 
 The probability of dis is more than 0.05 thus the variable dis can be removed from the model and we have the logistic model.
 
 ```{r}
-logistic_model <-  glm(target ~ indus + nox + age + rad, data = training_set, family = binomial)
-anova(logistic_model, test="Chisq")
+logistic_model2 <-  glm(target ~ indus + nox + age + rad, data = training_set, family = binomial)
+anova(logistic_model2, test="Chisq")
 ```
 
 Now the variable age has pr(\>Chi)=0.2333\>0.05, thus age seems to be removable, so let's drop it from the logistic model.
@@ -352,4 +352,6 @@ results <- rbind(results, tibble(
 cm_step_model3
 ```
 
-Based on the provided metrics, Model 1 (logistic_model) demonstrates the highest accuracy of 85.41% compared to Model 2 (step_model) and Model 3 (step_model3), which have accuracies of 51.29% and 75.97%, respectively. Additionally, Model 1 exhibits strong precision (80.73%) and sensitivity (93.67%), indicating its ability to correctly identify true positives and minimize false positives. Moreover, Model 1 achieves a balanced accuracy of 85.26%, reflecting its robust performance across both positive and negative classes. In contrast, Model 2 shows limited performance with a precision of 51.08% and sensitivity of 100%, suggesting potential overfitting or inadequate generalization. Model 3, although better than Model 2, lags behind Model 1 in accuracy and sensitivity, indicating room for improvement. Therefore, based on the provided metrics, Model 1 (logistic_model) appears to be the superior choice due to its higher accuracy, precision, sensitivity, and balanced performance across classes.
+```{r}
+kable(results)
+```
