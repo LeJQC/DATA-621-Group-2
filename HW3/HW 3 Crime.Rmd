@@ -17,7 +17,7 @@ library(corrplot)
 df <- read.csv("https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW3/crime-training-data_modified.csv")
 ```
 
-There are 466 observations and 13 variables in the training dataset. Of the 13 variables, 12 are predictor variables and 1 is the target variable.
+Let's get a general sense of the training data set using the `glimpse` function. There are 466 observations and 13 variables in the training data set. Of the 13 variables, 12 are predictor variables and 1 is the target variable. All of the variables seem to be floats or integers.
 
 ```{r}
 glimpse(df)
@@ -40,6 +40,7 @@ The variables are:
 -   `target`: whether the crime rate is above the median crime rate (1) or not (0)
 
 ### Summary Table
+Using the `describe` function from the psych library, we can get the summary statistics of all the variables as shown in the table below. Something to note here is the large standard deviation with the `zn`, `age` variable compared to its range, which may be because they are proportions. Another thing that stands out is the `tax` variable. It mean, standard deviation, median, and range are much larger than the other predictor variables so we might have to do some transformation on it later on. 
 ```{r}
 summary_table <- describe(df)
 
@@ -47,6 +48,7 @@ print(round(summary_table,2))
 ```
 
 ### Distrubtion Plot
+Next, let's look at the distribution of the 13 variables. As expected the values of the target variable are distributed around 0 and 1. Variables such as age, chas, dis, lstat, nox, ptration, rad, and zn are skewed to the left or right. On the other hand, variables medv and rm are normally distributed. The remaining predictor variables indus and tax have a bimodal distribution curve. 
 ```{r}
 df_long <- df %>%
   pivot_longer(
@@ -63,10 +65,20 @@ df_long %>%
 ```
 
 ### Correlation Plot
+To identify the correlation between each variable we can create a correlation plot by using the corrplot library. According to the correlation plot, the variables nox (0.73), age (0.63), rad (0.63), tax (0.61), and indus (0.60) are most linearly correlated with the target variable. In addition, there is a high degree of collinearity with tax and rad (0.91) and with nox and indus (0.76). These are variables to keep in mind when we select variables for our models. 
 ```{r}
 df %>% 
   cor(use = "complete.obs") %>%
-  corrplot(method = "color", tl.col = "black")
+  corrplot(method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
+```
+
+### Boxplot
+This boxplot shows the distribution and quartile ranges of the variables. We see that there are obvious outliers in chas and dis, which we may have to deal with later on. Other predictor variables such as lstat, medv, rm, and zn also have outliers, which may need to be dealth with later as well. 
+```{r}
+df_long %>% 
+  ggplot(aes(variable, value)) + 
+  geom_boxplot() + 
+  facet_wrap(~variable, scales='free', ncol=5)
 ```
 
 # 2. Data Preparation
@@ -84,10 +96,10 @@ test_set <- read.csv("https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/1
 print(sum(is.na(training_set)))
 print(sum(is.na(test_set)))
 ```
-This shows that there no missing value in the data and thus no need to bother about the missing values. 
+This shows that there are no missing values in the data and thus no need to bother about the missing values. 
 
 ## Modify an existing variable or create a new variable by combining the two or more variables 
-It is to be noted that the tax column contain the tax rate per $10,000 and medv contain the property value in $1000. The median tax on properties in neighborhood can be calculated by usingthese two columns. 
+It is to be noted that the tax column contain the tax rate per \$10,000 and medv contain the property value in $1000. The median tax on properties in neighborhood can be calculated by using these two columns. 
 $$medTax = \frac{medv*1000}{10000}*Tax$$
 or in simple it can be written as medTax = medv*Tax*1000/10000 = medv*tax/10
 
@@ -117,7 +129,7 @@ test_set<- test_set[,-9]
 
 It can concluded from the summary table that the range of some variable is high like zn's range is 0-100. This range can be normalize or standardize so that the range is between  0 and 1 or -3 to 3 respectively. 
 
-To normalize a number we just divide it by the maximum value in the variable. This can be done conviniently using scale() function in R. 
+To normalize a number we just divide it by the maximum value in the variable. This can be done conveniently using scale() function in R. 
 
 Note: No need to standardize the target variable, the predictor variables chas and nox because these already contain 0 and 1 or within the standardized limit.    
 ```{r}
@@ -140,12 +152,12 @@ The correlation plot can be regenerated on the modified or transformed data to s
 ```{r}
 training_set %>% 
   cor(use = "complete.obs") %>%
-  corrplot(method = "color", tl.col = "black")
+  corrplot(method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
 ```
 The highly correlated components can be selected for the logistic regression. Therefore, we will use indus, nox, age, rad, lstat, zn, dis. It can be seen that zn is higly correlated with nox, indus, age, dis,ptratio, lstate, medv. Therefore, it will be better to leave zn and no need to include in in the regression. 
 
 ```{r}
-logistic_model <-  glm(target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
+logistic_model <-  glm (target ~ indus + nox + age + rad + lstat + dis,data = training_set, family = binomial)
 summary(logistic_model)
 ```
 The p-value for the lstat is 0.4999 which is more than the critical value 0.05 thus this variable must be omited from the regression. 
