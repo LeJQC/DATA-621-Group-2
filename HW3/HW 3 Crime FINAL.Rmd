@@ -3,13 +3,13 @@ title: "DATA 621 HW 3 Crime"
 author: "Jian Quan Chen, Frederick Jones"
 date: "2024-03-22"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 # 1. Data Exploration
 
-```{r warning=FALSE}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(psych)
 library(corrplot)
@@ -130,14 +130,6 @@ test_set<- training_set|>mutate(
 head(training_set)
   
 ```
-Now no need of the variable tax as we have median value of tax per owner occupied home.Drop the variable tax from the data.
-```{r}
-training_set<- training_set[,-9]
-test_set<- test_set[,-9]
-#head(training_set)
-#head(test_set)
-```
-
 
 ## Feature scaling
 
@@ -153,7 +145,9 @@ training_set[,1:12][,c(-3, -4)] = scale(training_set[, 1:12][,c(-3, -4)])
 test_set = scale(test_set)
 head(training_set)
 ```
-## 3. Build Models (Logistic regression binary models)
+
+# 3. Build Models (Logistic regression binary models)
+
 ## Model 1
 The first task before writing the any model is to select the predictor variables.But the seldction of suitable predictor variable is a complex task and if we omit any predictor varible which influence the target variable, it induces a bias in the output of the model which is known as omitted-variable bias. Thus, one need to be very careful while selction of suitable predictor variable. 
 
@@ -252,7 +246,7 @@ summary(step_model3)
 
 Comparing the residual deviance values, the stepwise model with residential land proportion, distance to employment centers, and pupil-teacher ratio (step_model3) exhibits a residual deviance of 397.46. This is higher than the residual deviance of 197.32 for the previous stepwise model with additional variables (step_model). Despite the reduction in variables, the residual deviance of step_model3 is higher, suggesting that it may not fit the data as well as the previous stepwise model. Also, the AIC of 405.46 for step_model3 is higher than the AIC of 215.32 for step_model, indicating that step_model3does not provide a better fit to the data.
 
-### Part 4
+# 4. Select Models
 
 I will choose which model to use based off of the AIC score
 
