@@ -1,0 +1,10 @@
+---
+title: "HW4-Auto"
+output: html_document
+date: "2024-04-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
