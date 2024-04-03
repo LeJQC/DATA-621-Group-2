@@ -8,3 +8,57 @@ date: "2024-04-03"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+data_train <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance_training_data.csv')
+data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance-evaluation-data.csv')
+```
+
+```{r}
+data_train
+```
+
+### Data Exploration
+```{r}
+skim(data_train)
+```
+
+From the table we see that there are missing values within the CAR_AGE, AGE, and the YOJ columns,
+
+### DATA PREPERATION 
+
+Lets remove rows where the AGE column is NA, also drop index column
+```{r}
+data_train <- data_train %>%
+  filter(!is.na(AGE))
+
+data_train <- subset(data_train, select = -INDEX)
+```
+
+Removing the dollar sign from the OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK column
+```{r}
+data_train$OLDCLAIM <- gsub("\\$|,", "", data_train$OLDCLAIM)
+data_train$HOME_VAL <- gsub("\\$|,", "", data_train$HOME_VAL)
+data_train$INCOME <- gsub("\\$|,", "", data_train$INCOME)
+data_train$BLUEBOOK <- gsub("\\$|,", "", data_train$BLUEBOOK)
+```
+
+
+Convert the specified columns to numeric
+```{r}
+data_train$OLDCLAIM <- as.numeric(data_train$OLDCLAIM)
+data_train$HOME_VAL <- as.numeric(data_train$HOME_VAL)
+data_train$INCOME <- as.numeric(data_train$INCOME)
+data_train$BLUEBOOK <- as.numeric(data_train$BLUEBOOK)
+```
+
+
+Some values  seem to have invalid values, such as negative numbers, when that is so, we will replace with 0
+```{r}
+fix_missing <- function(df) {
+  df %>% 
+    mutate_at(vars(c("CAR_AGE", "YOJ", "AGE", "INCOME", "HOME_VAL")), ~ifelse(. < 0, 0, .))
+}
+
+data_train <- fix_missing(data_train)
+```
+
