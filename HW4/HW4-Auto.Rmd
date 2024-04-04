@@ -13,7 +13,7 @@ library(corrplot)
 library(skimr)
 library(dplyr)
 ```
-## What is the probability that a person will crash their car and also the amount of money it will cost if the persondoes crash their car?
+## What is the probability that a person will crash their car and also the amount of money it will cost if the person does crash their car?
 
 ```{r}
 data_train <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance_training_data.csv')
