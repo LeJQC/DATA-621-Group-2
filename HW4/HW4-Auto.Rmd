@@ -6,7 +6,14 @@ date: "2024-04-03"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(kableExtra)
+library(corrplot)
+library(skimr)
+library(dplyr)
 ```
+## What is the probability that a person will crash their car and also the amount of money it will cost if the persondoes crash their car?
 
 ```{r}
 data_train <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance_training_data.csv')
@@ -16,15 +23,89 @@ data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/
 ```{r}
 data_train
 ```
+Here's what each column name represents 
+```{r}
+variable_info <- data.frame(
+  Variable_Name = c("INDEX", "TARGET_FLAG", "TARGET_AMT", "AGE", "BLUEBOOK", "CAR_AGE", "CAR_TYPE", "CAR_USE", 
+                    "CLM_FREQ", "EDUCATION", "HOMEKIDS", "HOME_VAL", "INCOME", "JOB", "KIDSDRIV", "MSTATUS", 
+                    "MVR_PTS", "OLDCLAIM", "PARENT1", "RED_CAR", "REVOKED", "SEX", "TIF", "TRAVTIME", "URBANICITY", "YOJ"),
+  Definition = c("Identification Variable (do not use)", "Was Car in a crash?", "If car was in a crash, what was the cost", 
+                 "Age of Driver", "Value of Vehicle", "Vehicle Age", "Type of Car", "Vehicle Use", "Number of Claims (Past 5 Years)",
+                 "Max Education Level", "Number of Children at Home", "Home Value", "Income", "Job Category", 
+                 "Number of Driving Children", "Marital Status", "Motor Vehicle Record Points", "Total Claims (Past 5 Years)", 
+                 "Single Parent", "A Red Car", "License Revoked (Past 7 Years)", "Gender", "Time in Force", 
+                 "Distance to Work", "Home/Work Area", "Years on Job")
+)
+
+variable_info_table <- variable_info %>%
+  kable("html", align = "l", caption = "Variable Names and Definitions") %>%
+  kable_styling(full_width = FALSE)
+
+variable_info_table
+```
 
 ### Data Exploration
 ```{r}
 skim(data_train)
 ```
+From the table we see that there are missing values within the CAR_AGE, AGE, and the YOJ columns
 
-From the table we see that there are missing values within the CAR_AGE, AGE, and the YOJ columns,
+#### Distribution Plot 
+Let's look at the distribution of all the variables 
+```{r}
+numeric_cols <- sapply(data_train, is.numeric)
+data_train_numeric <- data_train[, numeric_cols]
 
-### DATA PREPERATION 
+non_numeric_cols <- names(data_train)[!numeric_cols]
+
+df_long <- data_train_numeric %>%
+  pivot_longer(
+    cols = -one_of(non_numeric_cols),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+ggplot(df_long, aes(x = value, fill = variable)) + 
+  geom_density(alpha = 0.5) +  
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = NULL, y = NULL)  
+```
+ 
+Looking at the Target_Flag density plot, we see that the TARGET_FLAG plot is skewed to the right, indicating that there are more instances where cars weren't in a crash compared to those where they were. This imbalance can lead to overfitting, where the model may become overly biased towards predicting the majority class (no crash).
+
+To confirm lets see the proportion of 0's to 1's in the TARGET_FLAG column 
+```{r}
+proportion_zeros <- sum(data_train$TARGET_FLAG == 0, na.rm = TRUE) / sum(!is.na(data_train$TARGET_FLAG)) * 100
+proportion_ones <- 100 - proportion_zeros
+
+cat("Proportion of 0s:", proportion_zeros, "%\n")
+cat("Proportion of 1s:", proportion_ones, "%\n")
+```
+
+
+#### Correlation plot 
+```{r}
+numeric_data <- data_train %>% 
+  select_if(is.numeric)
+
+correlation_matrix <- cor(numeric_data, use = "complete.obs")
+
+corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
+```
+
+The correlation analysis indicates positive relationships with the TARGET_FLAG variable for the following variables: a moderate positive correlation with TARGET_AMT (0.53) and weak positive correlations with KIDSDRIV (0.10), CLM_FREQ (0.22), and MVR_PTS (0.22).
+
+#### Box Plot 
+
+The box plot for the TARGET_AMT column indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. As a data scientist, it's essential to address these outliers to better understand the distribution and ensure accurate analysis of the TARGET_AMT data.
+```{r}
+df_long %>% 
+  ggplot(aes(variable, value)) + 
+  geom_boxplot() + 
+  facet_wrap(~variable, scales='free', ncol=5)
+```
+
+### Data Preperation
 
 Lets remove rows where the AGE column is NA, also drop index column
 ```{r}
@@ -56,9 +137,35 @@ Some values  seem to have invalid values, such as negative numbers, when that is
 ```{r}
 fix_missing <- function(df) {
   df %>% 
-    mutate_at(vars(c("CAR_AGE", "YOJ", "AGE", "INCOME", "HOME_VAL")), ~ifelse(. < 0, 0, .))
+    mutate_at(vars(c("CAR_AGE", "YOJ", "AGE", "INCOME", "HOME_VAL")), ~ifelse(. < 0, median(., na.rm = TRUE), .))
 }
 
 data_train <- fix_missing(data_train)
 ```
 
+### BUILD MODELS
+
+#### Model 1
+Let's build a model using the variables CLM_FREQ, KIDSDRIV, CAR_AGE, and HOMEKIDS, as they showed higher correlations with the target variable during the correlation analysis.
+```{r}
+lm_model <- lm(TARGET_AMT ~ CLM_FREQ + KIDSDRIV + CAR_AGE + HOMEKIDS + MVR_PTS + AGE, data = data_train)
+
+summary(lm_model)
+```
+Now let's do a stepwise model where the algorithm chooses the best subset of predictors based on a specified criterion, such as the Akaike Information Criterion (AIC) or Bayesian Information Criterion (BIC).
+```{r}
+stepwise_model <- step(lm_model, direction = "both", trace = 0)
+
+summary(stepwise_model)
+```
+lm_model (with AGE, Model 1):
+
+Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS are all significant (p < 0.05), impacting TARGET_AMT significantly.
+AGE coefficient is not significant (p = 0.432), suggesting no linear relationship with TARGET_AMT.
+Adjusted R-squared: 0.02885, explaining about 2.9% of variance in TARGET_AMT.
+stepwise_model (without AGE, Model 2):
+
+Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS remain significant.
+Removing AGE didn't affect other coefficients significantly.
+Adjusted R-squared: 0.0289, slightly lower than Model 1.
+Comparing both, they share significant predictors, and removing AGE didn't alter coefficients much. Hence, Model 2, simpler yet potent, might be preferable. Regarding coefficients, CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS positively correlate with TARGET_AMT, aligning with expectations.
