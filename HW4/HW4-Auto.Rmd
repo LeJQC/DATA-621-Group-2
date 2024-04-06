@@ -21,7 +21,7 @@ data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/
 ```
 
 ```{r}
-data_train
+head(data_train)
 ```
 Here's what each column name represents 
 ```{r}
