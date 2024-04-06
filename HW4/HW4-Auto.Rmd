@@ -97,7 +97,7 @@ The correlation analysis indicates positive relationships with the TARGET_FLAG v
 
 #### Box Plot 
 
-The box plot for the TARGET_AMT column indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. As a data scientist, it's essential to address these outliers to better understand the distribution and ensure accurate analysis of the TARGET_AMT data.
+The box plot for the TARGET_AMT column indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. 
 ```{r}
 df_long %>% 
   ggplot(aes(variable, value)) + 
