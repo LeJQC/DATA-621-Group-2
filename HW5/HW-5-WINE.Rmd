@@ -6,6 +6,202 @@ date: "2024-04-04"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(kableExtra)
+library(corrplot)
+library(skimr)
+library(dplyr)
+library(Hmisc)
 ```
 
 
+### What is the number of cases of wine that will be sold given certain properties of the wine?
+
+```{r}
+train_wine <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW5/wine-training-data.csv')
+test_wine <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW5/wine-evaluation-data.csv')
+```
+
+```{r}
+head(train_wine)
+```
+
+### Data Exploration
+
+Here's what each column represents 
+```{r}
+variable_info <- data.frame(
+  Variable_Name = c("INDEX", "TARGET", "AcidIndex", "Alcohol", "Chlorides", "CitricAcid", 
+                    "Density", "FixedAcidity", "FreeSulfurDioxide", "LabelAppeal", 
+                    "ResidualSugar", "STARS", "Sulphates", "TotalSulfurDioxide", 
+                    "VolatileAcidity", "pH"),
+  Definition = c("Identification Variable (do not use)",
+                 "Number of Cases Purchased",
+                 "Proprietary method of testing total acidity of wine by using a weighted average",
+                 "Alcohol Content",
+                 "Chloride content of wine",
+                 "Citric Acid Content",
+                 "Density of Wine",
+                 "Fixed Acidity of Wine",
+                 "Sulfur Dioxide content of wine",
+                 "Marketing Score indicating the appeal of label design for consumers. High numbers suggest customers like the label design. Negative numbers suggest customers don't like the design.",
+                 "Residual Sugar of wine",
+                 "Wine rating by a team of experts. 4 Stars = Excellent, 1 Star = Poor A high number of stars suggests high sales",
+                 "Sulfate content of wine",
+                 "Total Sulfur Dioxide of Wine",
+                 "Volatile Acid content of wine",
+                 "pH of wine")
+)
+
+variable_info_table <- variable_info %>%
+  kable("html", align = "l", caption = "Variable Names and Definitions") %>%
+  kable_styling(full_width = FALSE)
+
+variable_info_table
+```
+
+
+```{r}
+describe(train_wine)
+```
+
+### Data Exploration
+
+#### Distribution Plot 
+
+Let's look at the distribution of all the variables 
+```{r}
+numeric_cols <- sapply(train_wine, is.numeric)
+data_train_numeric <- train_wine[, numeric_cols]
+
+non_numeric_cols <- names(train_wine)[!numeric_cols]
+
+df_long <- data_train_numeric %>%
+  pivot_longer(
+    cols = -one_of(non_numeric_cols),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+ggplot(df_long, aes(x = value, fill = variable)) + 
+  geom_density(alpha = 0.5) +  
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = NULL, y = NULL)  
+```
+
+For the Target variable, there are multiple peaks, particularly between 2 and 6, which means the majority of cases ordered is 4. Note also that the pH peaks at around 3 which may prove that the average pH level of these wins are around that value
+
+#### Correlation plot 
+```{r}
+
+correlation_matrix <- cor(train_wine, use = "complete.obs")
+
+corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
+```
+It appears that there is a high correlation between STARS(wine rating), LabelAppeal,  and the target variable, meaning that the higher the rating the wine gets, or the more appealing the design of the label the more likely it is to be ordered in larger quantities by distribution companies.
+
+#### Box Plot 
+```{r}
+df_long %>% 
+  ggplot(aes(variable, value)) + 
+  geom_boxplot() + 
+  facet_wrap(~variable, scales='free', ncol=5)
+```
+Similar to the density plot, we see that the median for the amount of cases bought(TARGET) is at 3, also the median rating the wines receive is a 2.
+
+### DATA PREPERATION
+
+A few columns contain NA values, this may lead to a more accurate model, we'll explore the possibilities within the data preparation section
+```{r}
+zero_check <- sapply(train_wine, function(x) 0 %in% x)
+zero_check
+```
+
+Some of the columns contain NA values such as pH, residual sugar, chlorides, and upon printing the unique values of the pH column, the column doesn't contain a 0, which represents an acidic kind of wine, so I will be replacing the NA values in the pH column with 0
+```{r}
+train_wine$pH[is.na(train_wine$pH)] <- 0
+```
+
+
+The Residual sugar column contains negative values which doesn't make sense in the context of the amount of residual sugar in wine, so we will replace those values with the median, I will do the same for the chloride, Sulphates, totalSulfurDioxide,Alcohol and FreeSulfurDioxide column for the same logical reasoning
+```{r}
+non_negative_median <- median(train_wine$ResidualSugar[train_wine$ResidualSugar >= 0], na.rm = TRUE)
+non_negative_median2 <- median(train_wine$Chlorides[train_wine$Chlorides >= 0], na.rm = TRUE)
+non_negative_median3 <- median(train_wine$FreeSulfurDioxide[train_wine$FreeSulfurDioxide >= 0], na.rm = TRUE)
+non_negative_median4 <- median(train_wine$TotalSulfurDioxide[train_wine$TotalSulfurDioxide >= 0], na.rm = TRUE)
+non_negative_median5 <- median(train_wine$Sulphates[train_wine$Sulphates >= 0], na.rm = TRUE)
+non_negative_median6 <- median(train_wine$Alcohol[train_wine$Alcohol >= 0], na.rm = TRUE)
+
+
+
+
+train_wine$ResidualSugar[train_wine$ResidualSugar < 0] <- non_negative_median
+train_wine$Chlorides[train_wine$Chlorides < 0] <- non_negative_median2
+train_wine$FreeSulfurDioxide[train_wine$FreeSulfurDioxide < 0] <- non_negative_median3
+train_wine$TotalSulfurDioxide[train_wine$TotalSulfurDioxide < 0] <- non_negative_median4
+train_wine$Sulphates[train_wine$Sulphates < 0] <- non_negative_median5
+train_wine$Alcohol[train_wine$Alcohol < 0] <- non_negative_median6
+```
+
+
+Other columns contain the value 0, so the NA values may actually be predictive of the target variable, with that being said, the other columns that contain NA values will contain flags to help inform the model about the presence of missing data, enabling it to discern potential patterns or relationships between missingness and the target variable.
+```{r}
+train_wine$ResidualSugar_missing <- ifelse(is.na(train_wine$ResidualSugar), 1, 0)
+train_wine$TotalSulfurDioxide_missing <- ifelse(is.na(train_wine$TotalSulfurDioxide), 1, 0)
+train_wine$Chlorides_missing <- ifelse(is.na(train_wine$Chlorides), 1, 0)
+train_wine$FreeSulfurDioxide_missing <- ifelse(is.na(train_wine$FreeSulfurDioxide), 1, 0)
+train_wine$Sulphates_missing <- ifelse(is.na(train_wine$Sulphates), 1, 0)
+train_wine$Alcohol_missing <- ifelse(is.na(train_wine$Alcohol), 1, 0)
+
+## Eveything else that is na will be replaced with the median
+for (col in names(train_wine)) {
+  train_wine[is.na(train_wine[, col]), col] <- mean(train_wine[, col], na.rm = TRUE)
+}
+head(train_wine)
+```
+
+
+Drop index column 
+```{r}
+train_wine <- subset(train_wine, select = -INDEX)
+```
+
+
+### BUILD MODELS
+
+#### Model 1(Poisson)
+I'll be using the variables I believe will have the strongest fit based off of the correlation plot values for the Poisson regression model
+```{r}
+wine <- lm(TARGET ~ LabelAppeal + STARS + Alcohol, 
+             data = train_wine,
+            family = poisson)
+
+summary(wine)
+```
+
+The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 21.8% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
+
+#### Model 2(Multiple linear)
+I'll be using all the variables for the multiple linear regression model
+```{r}
+for (col in names(train_wine)) {
+  train_wine[is.na(train_wine[, col]), col] <- median(train_wine[, col], na.rm = TRUE)
+}
+
+
+wine2 <- lm(TARGET ~ ., 
+             data = train_wine)
+
+summary(wine2)
+```
+We find that wines with more appealing labels (LabelAppeal) tend to exhibit a significant increase in expected sales, with each unit increase in label appeal corresponding to a 0.6511 increase in expected cases ordered, holding other variables constant. Similarly, wines with higher star ratings (STARS) demonstrate a substantial positive effect on sales, with each additional star rating leading to a 0.7462 increase in expected cases ordered. Additionally, the alcohol content (Alcohol) contributes positively to sales, although its effect size is relatively smaller compared to label appeal and star ratings, with each percentage point increase in alcohol content associated with a 0.0239 increase in expected cases ordered.
+
+Using Stepwise regression
+```{r}
+stepwise_model <- step(wine2, direction = "both", trace = 0)
+
+summary(stepwise_model)
+```
+Based on the analysis, Model 2 (stepwise_model) appears to be preferable. It retains the significant predictors from Model 1 (lm_model), such as VolatileAcidity, CitricAcid, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, Density, Sulphates, Alcohol, LabelAppeal, AcidIndex, and STARS, while simplifying the model by removing the non-significant predictor Sulphates_missing. Additionally, the adjusted R-squared value of Model 2 is only slightly lower than that of Model 1 (0.2806 compared to 0.2813), suggesting that it still provides a good level of explanation for the variance in wine quality. Therefore, Model 2 offers a more parsimonious and efficient solution without sacrificing much predictive power, making it the better choice.
