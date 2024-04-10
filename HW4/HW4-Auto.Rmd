@@ -23,26 +23,6 @@ data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/
 ```{r}
 head(data_train)
 ```
-Here's what each column name represents 
-```{r}
-variable_info <- data.frame(
-  Variable_Name = c("INDEX", "TARGET_FLAG", "TARGET_AMT", "AGE", "BLUEBOOK", "CAR_AGE", "CAR_TYPE", "CAR_USE", 
-                    "CLM_FREQ", "EDUCATION", "HOMEKIDS", "HOME_VAL", "INCOME", "JOB", "KIDSDRIV", "MSTATUS", 
-                    "MVR_PTS", "OLDCLAIM", "PARENT1", "RED_CAR", "REVOKED", "SEX", "TIF", "TRAVTIME", "URBANICITY", "YOJ"),
-  Definition = c("Identification Variable (do not use)", "Was Car in a crash?", "If car was in a crash, what was the cost", 
-                 "Age of Driver", "Value of Vehicle", "Vehicle Age", "Type of Car", "Vehicle Use", "Number of Claims (Past 5 Years)",
-                 "Max Education Level", "Number of Children at Home", "Home Value", "Income", "Job Category", 
-                 "Number of Driving Children", "Marital Status", "Motor Vehicle Record Points", "Total Claims (Past 5 Years)", 
-                 "Single Parent", "A Red Car", "License Revoked (Past 7 Years)", "Gender", "Time in Force", 
-                 "Distance to Work", "Home/Work Area", "Years on Job")
-)
-
-variable_info_table <- variable_info %>%
-  kable("html", align = "l", caption = "Variable Names and Definitions") %>%
-  kable_styling(full_width = FALSE)
-
-variable_info_table
-```
 
 ### Data Exploration
 ```{r}
