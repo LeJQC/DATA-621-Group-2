@@ -1,6 +1,9 @@
 ---
 title: "HW5"
-output: html_document
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
 date: "2024-04-04"
 ---
 
