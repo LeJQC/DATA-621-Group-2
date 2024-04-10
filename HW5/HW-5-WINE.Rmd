@@ -30,39 +30,6 @@ head(train_wine)
 
 ### Data Exploration
 
-Here's what each column represents 
-```{r}
-variable_info <- data.frame(
-  Variable_Name = c("INDEX", "TARGET", "AcidIndex", "Alcohol", "Chlorides", "CitricAcid", 
-                    "Density", "FixedAcidity", "FreeSulfurDioxide", "LabelAppeal", 
-                    "ResidualSugar", "STARS", "Sulphates", "TotalSulfurDioxide", 
-                    "VolatileAcidity", "pH"),
-  Definition = c("Identification Variable (do not use)",
-                 "Number of Cases Purchased",
-                 "Proprietary method of testing total acidity of wine by using a weighted average",
-                 "Alcohol Content",
-                 "Chloride content of wine",
-                 "Citric Acid Content",
-                 "Density of Wine",
-                 "Fixed Acidity of Wine",
-                 "Sulfur Dioxide content of wine",
-                 "Marketing Score indicating the appeal of label design for consumers. High numbers suggest customers like the label design. Negative numbers suggest customers don't like the design.",
-                 "Residual Sugar of wine",
-                 "Wine rating by a team of experts. 4 Stars = Excellent, 1 Star = Poor A high number of stars suggests high sales",
-                 "Sulfate content of wine",
-                 "Total Sulfur Dioxide of Wine",
-                 "Volatile Acid content of wine",
-                 "pH of wine")
-)
-
-variable_info_table <- variable_info %>%
-  kable("html", align = "l", caption = "Variable Names and Definitions") %>%
-  kable_styling(full_width = FALSE)
-
-variable_info_table
-```
-
-
 ```{r}
 describe(train_wine)
 ```
