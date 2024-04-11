@@ -1,7 +1,7 @@
 ---
 title: "HW4-Auto"
 output:
-  pdf_document:
+  pdf_document: 
     latex_engine: xelatex
   html_document: default
 date: "2024-04-03"
@@ -15,6 +15,8 @@ library(kableExtra)
 library(corrplot)
 library(skimr)
 library(dplyr)
+library(psych)
+library(MASS)
 ```
 ## What is the probability that a person will crash their car and also the amount of money it will cost if the person does crash their car?
 
@@ -31,10 +33,16 @@ head(data_train)
 ```{r}
 skim(data_train)
 ```
-From the table we see that there are missing values within the CAR_AGE, AGE, and the YOJ columns
+From the table, we can see that there are 8161 rows and 26 columns in the dataset, two of which are response variables (TARGET_FLAG and TARGET_AMT). Also,  we see that there are missing values within the CAR_AGE, AGE, and YOJ columns. In addition, there are 12 columns that are numeric variables and 14 columns that are made up of strings. 
+
+Using the glimpse() function, we can see that some of the 14 columns that are made of up string are actually continuous variables like OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK. We will need to do some data cleaning later on to convert these columns to numeric variables. Also, since some of the categorical variables have 2 characteristics, we can substitute these observations to 0 and 1 which will make it easier when we build our models. These are the categorical variables that are dichotomous: PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY.
+
+```{r}
+glimpse(data_train)
+```
 
 #### Distribution Plot 
-Let's look at the distribution of all the variables 
+Let's look at the distribution of all the numeric variables.
 ```{r}
 numeric_cols <- sapply(data_train, is.numeric)
 data_train_numeric <- data_train[, numeric_cols]
@@ -64,6 +72,20 @@ proportion_ones <- 100 - proportion_zeros
 cat("Proportion of 0s:", proportion_zeros, "%\n")
 cat("Proportion of 1s:", proportion_ones, "%\n")
 ```
+This indicates that 73.6% or 6008 cars were not involved in a car crash while 26.4% or 2153 cars were. Since we have to predict the cost of the car crash let's take a closer look at the TARGET_AMT variable. Let's take out all the 6008 cars that were not involved in a crash and use the describe() from the psych package to look at the summary statistics of the cost. 
+
+```{r}
+df_filtered <- data_train[data_train$TARGET_AMT != 0,]
+describe(df_filtered$TARGET_AMT)
+```
+There were 2153 cars involved in a crash. The mean cost of a car crash is \$5702.18, the median is $4104 and the standard deviation is \$7743.18. The cost ranged from \$30.28 to \$107586.10. This gives us a better sense of the distribution of the cost of car crashes. Since the mean is greater than the median, we can expect the distribution to be skewed to the right.  
+
+```{r}
+ggplot(data_train, aes(x=TARGET_AMT)) +
+  geom_histogram(binwidth=500, fill="blue", color="black") +
+  theme_minimal() +
+  labs(title="Distribution of TARGET_AMT", x="TARGET_AMT", y="Frequency")
+```
 
 
 #### Correlation plot 
@@ -76,11 +98,11 @@ correlation_matrix <- cor(numeric_data, use = "complete.obs")
 corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
 ```
 
-The correlation analysis indicates positive relationships with the TARGET_FLAG variable for the following variables: a moderate positive correlation with TARGET_AMT (0.53) and weak positive correlations with KIDSDRIV (0.10), CLM_FREQ (0.22), and MVR_PTS (0.22).
+To identify the correlation between each variable we can create a correlation plot by using the corrplot library. The correlation analysis indicates positive relationships with the TARGET_FLAG variable for the following variables: a moderate positive correlation with TARGET_AMT (0.53) and weak positive correlations with KIDSDRIV (0.10), CLM_FREQ (0.22), and MVR_PTS (0.22). 
 
 #### Box Plot 
 
-The box plot for the TARGET_AMT column indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. 
+The box plot for the TARGET_AMT column also indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. 
 ```{r}
 df_long %>% 
   ggplot(aes(variable, value)) + 
@@ -90,15 +112,20 @@ df_long %>%
 
 ### Data Preperation
 
-Lets remove rows where the AGE column is NA, also drop index column
+Out of the 8161 rows in the dataset, there were 6 rows in the AGE column where there was a missing value. Let's remove rows where the AGE column is NA and also drop index column. The columns CAR_AGE and YOJ had NA values as well but we decided not to remove these rows as the NA values in these columns represented about 6% of the total rows. Removing 6% of the dataset would significantly impact the distribution of the data and our models. 
 ```{r}
+missing_values <- data_train %>%
+  summarise_all(function(x) sum(is.na(x)))
+
+print(missing_values)
+
 data_train <- data_train %>%
   filter(!is.na(AGE))
 
 data_train <- subset(data_train, select = -INDEX)
 ```
 
-Removing the dollar sign from the OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK column
+Next, we removed the dollar sign from the OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK column. These are numeric values but were represented as strings in the dataset. These continuous variables may be important to the determining whether a car crashes and how much it cost. 
 ```{r}
 data_train$OLDCLAIM <- gsub("\\$|,", "", data_train$OLDCLAIM)
 data_train$HOME_VAL <- gsub("\\$|,", "", data_train$HOME_VAL)
@@ -106,17 +133,20 @@ data_train$INCOME <- gsub("\\$|,", "", data_train$INCOME)
 data_train$BLUEBOOK <- gsub("\\$|,", "", data_train$BLUEBOOK)
 ```
 
-
-Convert the specified columns to numeric
+Converting the specified columns to numeric
 ```{r}
 data_train$OLDCLAIM <- as.numeric(data_train$OLDCLAIM)
 data_train$HOME_VAL <- as.numeric(data_train$HOME_VAL)
 data_train$INCOME <- as.numeric(data_train$INCOME)
 data_train$BLUEBOOK <- as.numeric(data_train$BLUEBOOK)
+
+selected_vars <- data_train %>%
+  dplyr::select(OLDCLAIM, HOME_VAL, INCOME, BLUEBOOK)
+
+glimpse(selected_vars)
 ```
 
-
-Some values  seem to have invalid values, such as negative numbers, when that is so, we will replace with 0
+Some values seem to have invalid values, such as negative numbers, when that is so, we will replace with it with the median values. This will help maintain the distribution of the data. 
 ```{r}
 fix_missing <- function(df) {
   df %>% 
@@ -125,6 +155,80 @@ fix_missing <- function(df) {
 
 data_train <- fix_missing(data_train)
 ```
+
+As mentioned before, let's convert these categorical variables PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY into binary variables.
+
+- `PARENT1` will be 1 if the observation was "YES"
+- `SEX` will be 1 if the observation is "M"
+- `STATUS` will be 1 if the observation is “Yes”
+- `CAR_USE` will be 1 if the observation is “Private”
+- `RED_CAR` will be 1 if the observation is “Yes
+- `REVOKED` will be 1 if the observation is “Yes”
+- `URBANICITY` will be 1 if the observation is “Urban”
+
+```{r}
+data_train <- data_train %>% 
+  mutate(PARENT1 = ifelse(PARENT1 == "Yes", 1, 0),
+         SEX = ifelse(SEX == "M", 1, 0),
+         MSTATUS = ifelse(MSTATUS == "Yes", 1, 0),
+         CAR_USE = ifelse(CAR_USE == "Private", 1, 0),
+         RED_CAR = ifelse(RED_CAR == "Yes", 1, 0),
+         REVOKED = ifelse(REVOKED == "Yes", 1, 0),
+         URBANICITY = ifelse(URBANICITY == "Urban", 1, 0))
+
+print(colnames(data_train))
+
+cate_var <- data_train %>% 
+  dplyr::select(PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY)
+
+glimpse(cate_var)
+```
+
+Since we are dealing with binary variables, using the pearson correlation would not be appropriate here as it only measures the linear relationship between two continuous variables. Instead we can use a chi-squared test to determine the association between two categorical variables. The table below measures the association of the variables we just converted to the binary response variable, TARGET_FLAG. 
+```{r}
+variables <- c("PARENT1", "SEX", "MSTATUS", "CAR_USE", "RED_CAR", "REVOKED", "URBANICITY")
+
+results <- data.frame(Variable = character(),
+                      Chi_Squared = numeric(),
+                      DF = integer(),
+                      P_Value = numeric(),
+                      stringsAsFactors = FALSE)
+
+# Perform Chi-square test
+for (var in variables) {
+  contingency_table <- table(data_train[[var]], data_train$TARGET_FLAG)
+  test_result <- chisq.test(contingency_table)
+  
+  results <- rbind(results, data.frame(Variable = var,
+                                       Chi_Squared = test_result$statistic,
+                                       DF = test_result$parameter,
+                                       P_Value = test_result$p.value))
+}
+
+print(results)
+```
+
+The table above shows that PARENT1, MSTATUS, CAR_USE, RED_CAR, REVOKED, and URBANICITY are statistically significant to TARGET_FLAG. SEX has a p-value of 0.0608 suggesting there is not a significant association between SEX and TARGET_FLAG. 
+
+Since we changed some columns to continuous variables, let's do another correlation plot but with just the continuous variables.
+```{r}
+# Identify continuous and binary variables
+continuous_vars <- data_train %>% 
+  select_if(is.numeric) %>%
+  select_if(~sum(. %in% 0:1) != length(.))
+
+binary_vars <- data_train %>% 
+  select_if(is.numeric) %>%
+  select_if(~sum(. %in% 0:1) == length(.))
+
+# Compute correlation matrix for continuous variables
+correlation_matrix <- cor(continuous_vars, use = "complete.obs")
+
+# Create correlation plot
+corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5) 
+```
+
+There does not seem to be any predictors that have a strong linear correlation with TARGET_AMT. MVR_PTS (0.14), CLM_FREQ(0.12), and OLDCLAIM(0.08) seem to have the highest correlation among the continuous predictors. 
 
 ### BUILD MODELS
 
@@ -143,6 +247,7 @@ summary(stepwise_model)
 ```
 lm_model (with AGE, Model 1):
 
+
 Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS are all significant (p < 0.05), impacting TARGET_AMT significantly.
 AGE coefficient is not significant (p = 0.432), suggesting no linear relationship with TARGET_AMT.
 Adjusted R-squared: 0.02885, explaining about 2.9% of variance in TARGET_AMT.
@@ -152,3 +257,36 @@ Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS remain signi
 Removing AGE didn't affect other coefficients significantly.
 Adjusted R-squared: 0.0289, slightly lower than Model 1.
 Comparing both, they share significant predictors, and removing AGE didn't alter coefficients much. Hence, Model 2, simpler yet potent, might be preferable. Regarding coefficients, CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS positively correlate with TARGET_AMT, aligning with expectations.
+
+
+#### Model 2
+First, we are going to create a binary logistic regression model to predict the probability that a person will crash their car. Based on the model 1, we can see that CLM_FREQ, MVR_PTS, and KIDSDRIV have the lowest p-value and are significant predictors of TARGET_FLAG. Also, we will use MSTATUS, CAR_USE, and REVOKED since they were all showed statistical significance with TARGET_FLAG in the chi-squared test. And, intuitively, these binary variables increase the probability of a car crash.
+
+```{r}
+model2 <- glm(TARGET_FLAG ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE  + REVOKED, 
+             data = data_train, family = binomial)
+
+summary(model2)
+```
+
+This model shows that all the predictor variables are statistically significant. The AIC for the model is 8446.7. Next, let's use the stepAIC function to improve this model.
+
+```{r}
+step_model <- stepAIC(model2, direction = "both", trace = FALSE)
+summary(step_model)
+```
+
+After using a stepwise selection process on model2, the results, specifically the AIC, are identical. This indicates that adding or removing predictors did not improve the original model. Again, all of the predictors have a p-value less than, 0.05 indicating they are statistically significant in predicting TARGET_FLAG. The intercept when the predictors are zero is -1.644. For the coefficients, a one unit increase in CLM_FREQ or claims processed corresponds to an increases of 0.264 in the log-odds of car crashes. All the coefficients seem to cause a positive increase in log-odds of car crashes except for CAR_USE. When CAR_USE is 1 (private vehicle), the log odds of a car crash is expected to decrease by 0.60461 compared to commercial car use. Intuitively, this makes sense as one would expect commercial vehicles to be involved more car crashes than private vehicles. The predictor REVOKED seems to cause the highest increase in log odds of car crash at 0.85418. This makes sense as you would expect someone who has had their license revoked be in a car crash. One coefficient estimate that does not seem to make sense is MSTATUS as one would expect married people to be safer drivers and be involved in less crashes. However, the model predicts that individuals who are not married are expected to increase log odds of a car crash by 0.582 compared to individuals who are married. 
+
+Next, let's create a multiple linear regression model to predict the amount of money it will cost if the person does crash their car. We will use the same predictors as before with the binary model since they were all statistically significant in predicting TARGET_FLAG. 
+
+```{r}
+model2_linear <- lm(TARGET_AMT ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE + REVOKED, data = data_train)
+
+summary(model2_linear)
+```
+
+Like the binary model, all of the coefficients in this multiple linear regression model have a p-value less than 0.05, indicating they are statistically significant. The intercept is 1740.8, which means that when all predictor variables are zero the expect cost of a car crash is $1740.8. When MSTATUS and CAR_USE changes from 0 to 1, this causes a decrease of 737.74 and 824.24 in cost of the car crash. This makes sense as married people generally drive safer and private vehicles are not driven as often as commercial vehicles. All of the other coefficients drive the cost of car crashes up with a one unit increase. 
+
+Overall, the p-value for the model is less than 0.05, indicating it is statistically significant in predicting TARGET_AMT. However, the R-squared for this model is 0.04134, suggesting that only 4% of the variability in TARGET_AMT can be explained by the model. Although this is very low, it is higher than the R-squared of the first model(0.02). Therefore, it may be advisable to retain the model for further analysis and refinement.
+
