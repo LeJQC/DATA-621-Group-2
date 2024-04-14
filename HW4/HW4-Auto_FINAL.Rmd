@@ -42,11 +42,12 @@ data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/
 
 # 1. Data Exploration
 
-First, we use the skim() function from the skimr package to get a broad overview of the training data. This function provides summary statistics for each column based on the data type.
+First, we will use the skim() function from the skimr package to get a broad overview of the training data. This function provides summary statistics for each column based on the data type.
 
 ```{r}
 skim(data_train)
 ```
+
 From the table, we can see that there are 8161 rows and 26 columns in the dataset, two of which are response variables (TARGET_FLAG and TARGET_AMT). Also,  we see that there are missing values within the CAR_AGE, AGE, and YOJ columns. In addition, there are 12 columns that are numeric variables and 14 columns that are made up of strings. 
 
 Using the glimpse() function, we can see that some of the 14 columns that are made of up string are actually continuous variables like OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK. We will need to do some data cleaning later on to convert these columns to numeric variables. Also, since some of the categorical variables have 2 characteristics, we can substitute these observations to 0 and 1 which will make it easier when we build our models. These are the categorical variables that are dichotomous: PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY.
