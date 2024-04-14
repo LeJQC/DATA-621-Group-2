@@ -1,0 +1,780 @@
+---
+title: "HW4-Auto"
+author: "Group 2 - Tilon Bobb, Jian Quan Chen, Frederick Jones"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+  html_document: default
+date: "2024-04-03"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(kableExtra)
+library(corrplot)
+library(skimr)
+library(dplyr)
+library(psych)
+library(MASS)
+library(ROSE)
+library(pROC)
+library(lmtest)
+library(car)
+library(leaps)
+library(gvlma)
+
+```
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,warning = FALSE, message = FALSE)
+```
+
+# What is the probability that a person will crash their car and also the amount of money it will cost if the person does crash their car?
+
+```{r}
+data_train <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance_training_data.csv')
+data_eval <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW4/insurance-evaluation-data.csv')
+```
+
+# 1. Data Exploration
+
+First, we use the skim() function from the skimr package to get a broad overview of the training data. This function provides summary statistics for each column based on the data type.
+
+```{r}
+skim(data_train)
+```
+From the table, we can see that there are 8161 rows and 26 columns in the dataset, two of which are response variables (TARGET_FLAG and TARGET_AMT). Also,  we see that there are missing values within the CAR_AGE, AGE, and YOJ columns. In addition, there are 12 columns that are numeric variables and 14 columns that are made up of strings. 
+
+Using the glimpse() function, we can see that some of the 14 columns that are made of up string are actually continuous variables like OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK. We will need to do some data cleaning later on to convert these columns to numeric variables. Also, since some of the categorical variables have 2 characteristics, we can substitute these observations to 0 and 1 which will make it easier when we build our models. These are the categorical variables that are dichotomous: PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY.
+
+```{r}
+glimpse(data_train)
+```
+
+#### Distribution Plot 
+Let's look at the distribution of all the numeric variables.
+
+```{r}
+numeric_cols <- sapply(data_train, is.numeric)
+data_train_numeric <- data_train[, numeric_cols]
+
+non_numeric_cols <- names(data_train)[!numeric_cols]
+
+df_long <- data_train_numeric %>%
+  pivot_longer(
+    cols = -one_of(non_numeric_cols),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+ggplot(df_long, aes(x = value, fill = variable)) + 
+  geom_density(alpha = 0.5) +  
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = NULL, y = NULL)  
+```
+ 
+Looking at the Target_Flag density plot, we see that the TARGET_FLAG plot is skewed to the right, indicating that there are more instances where cars weren't in a crash compared to those where they were. This imbalance can lead to overfitting, where the model may become overly biased towards predicting the majority class (no crash).
+
+To confirm lets see the proportion of 0's to 1's in the TARGET_FLAG column 
+
+```{r}
+proportion_zeros <- sum(data_train$TARGET_FLAG == 0, na.rm = TRUE) / sum(!is.na(data_train$TARGET_FLAG)) * 100
+proportion_ones <- 100 - proportion_zeros
+
+cat("Proportion of 0s:", proportion_zeros, "%\n")
+cat("Proportion of 1s:", proportion_ones, "%\n")
+```
+This indicates that 73.6% or 6008 cars were not involved in a car crash while 26.4% or 2153 cars were. Since we have to predict the cost of the car crash let's take a closer look at the TARGET_AMT variable. Let's take out all the 6008 cars that were not involved in a crash and use the describe() from the psych package to look at the summary statistics of the cost. 
+
+```{r}
+df_filtered <- data_train[data_train$TARGET_AMT != 0,]
+describe(df_filtered$TARGET_AMT)
+```
+There were 2153 cars involved in a crash. The mean cost of a car crash is \$5702.18, the median is $4104 and the standard deviation is \$7743.18. The cost ranged from \$30.28 to \$107586.10. This gives us a better sense of the distribution of the cost of car crashes. Since the mean is greater than the median, we can expect the distribution to be skewed to the right.  
+
+```{r}
+ggplot(data_train, aes(x=TARGET_AMT)) +
+  geom_histogram(binwidth=500, fill="blue", color="black") +
+  theme_minimal() +
+  labs(title="Distribution of TARGET_AMT", x="TARGET_AMT", y="Frequency")
+```
+
+
+#### Correlation plot 
+
+
+```{r}
+numeric_data <- data_train %>% 
+  select_if(is.numeric)
+
+correlation_matrix <- cor(numeric_data, use = "complete.obs")
+
+corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5)
+```
+
+
+To identify the correlation between each variable we can create a correlation plot by using the corrplot library. The correlation analysis indicates positive relationships with the TARGET_FLAG variable for the following variables: a moderate positive correlation with TARGET_AMT (0.53) and weak positive correlations with KIDSDRIV (0.10), CLM_FREQ (0.22), and MVR_PTS (0.22). 
+
+#### Box Plot 
+
+The box plot for the TARGET_AMT column also indicates a highly right-skewed distribution, despite the values ranging from 30 to 90 thousand. This skewness is evident from the compressed appearance of the box plot towards the lower end, suggesting the presence of outliers with exceptionally high values. 
+
+```{r}
+df_long %>% 
+  ggplot(aes(variable, value)) + 
+  geom_boxplot() + 
+  facet_wrap(~variable, scales='free', ncol=5)
+```
+
+# 2. Data Preperation
+
+Out of the 8161 rows in the dataset, there were 6 rows in the AGE column where there was a missing value. Let's remove rows where the AGE column is NA and also drop index column. The columns CAR_AGE and YOJ had NA values as well but we decided not to remove these rows as the NA values in these columns represented about 6% of the total rows. Removing 6% of the dataset would significantly impact the distribution of the data and our models. 
+```{r}
+missing_values <- data_train %>%
+  summarise_all(function(x) sum(is.na(x)))
+
+print(missing_values)
+
+data_train <- data_train %>%
+  filter(!is.na(AGE))
+
+data_train <- subset(data_train, select = -INDEX)
+```
+
+Next, we removed the dollar sign from the OLDCLAIM, HOME_VAL, INCOME, and BLUEBOOK column. These are numeric values but were represented as strings in the dataset. These continuous variables may be important to the determining whether a car crashes and how much it cost. 
+```{r}
+data_train$OLDCLAIM <- gsub("\\$|,", "", data_train$OLDCLAIM)
+data_train$HOME_VAL <- gsub("\\$|,", "", data_train$HOME_VAL)
+data_train$INCOME <- gsub("\\$|,", "", data_train$INCOME)
+data_train$BLUEBOOK <- gsub("\\$|,", "", data_train$BLUEBOOK)
+```
+
+Converting the specified columns to numeric
+```{r}
+data_train$OLDCLAIM <- as.numeric(data_train$OLDCLAIM)
+data_train$HOME_VAL <- as.numeric(data_train$HOME_VAL)
+data_train$INCOME <- as.numeric(data_train$INCOME)
+data_train$BLUEBOOK <- as.numeric(data_train$BLUEBOOK)
+
+selected_vars <- data_train %>%
+  dplyr::select(OLDCLAIM, HOME_VAL, INCOME, BLUEBOOK)
+
+glimpse(selected_vars)
+```
+
+Some values seem to have invalid values, such as negative numbers, when that is so, we will replace with it with the median values. This will help maintain the distribution of the data. 
+```{r}
+fix_missing <- function(df) {
+  df %>% 
+    mutate_at(vars(c("CAR_AGE", "YOJ", "AGE", "INCOME", "HOME_VAL")), ~ifelse(. < 0, median(., na.rm = TRUE), .))
+}
+
+data_train <- fix_missing(data_train)
+```
+
+As mentioned before, let's convert these categorical variables PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY into binary variables.
+
+- `PARENT1` will be 1 if the observation was "YES"
+- `SEX` will be 1 if the observation is "M"
+- `STATUS` will be 1 if the observation is “Yes”
+- `CAR_USE` will be 1 if the observation is “Private”
+- `RED_CAR` will be 1 if the observation is “Yes
+- `REVOKED` will be 1 if the observation is “Yes”
+- `URBANICITY` will be 1 if the observation is “Urban”
+
+```{r}
+data_train <- data_train %>% 
+  mutate(PARENT1 = ifelse(PARENT1 == "Yes", 1, 0),
+         SEX = ifelse(SEX == "M", 1, 0),
+         MSTATUS = ifelse(MSTATUS == "Yes", 1, 0),
+         CAR_USE = ifelse(CAR_USE == "Private", 1, 0),
+         RED_CAR = ifelse(RED_CAR == "Yes", 1, 0),
+         REVOKED = ifelse(REVOKED == "Yes", 1, 0),
+         URBANICITY = ifelse(URBANICITY == "Urban", 1, 0))
+
+print(colnames(data_train))
+
+cate_var <- data_train %>% 
+  dplyr::select(PARENT1, SEX, MSTATUS, CAR_USE, RED_CAR, REVOKED, URBANICITY)
+
+glimpse(cate_var)
+```
+
+Since we are dealing with binary variables, using the pearson correlation would not be appropriate here as it only measures the linear relationship between two continuous variables. Instead we can use a chi-squared test to determine the association between two categorical variables. The table below measures the association of the variables we just converted to the binary response variable, TARGET_FLAG. 
+```{r}
+variables <- c("PARENT1", "SEX", "MSTATUS", "CAR_USE", "RED_CAR", "REVOKED", "URBANICITY")
+
+results <- data.frame(Variable = character(),
+                      Chi_Squared = numeric(),
+                      DF = integer(),
+                      P_Value = numeric(),
+                      stringsAsFactors = FALSE)
+
+# Perform Chi-square test
+for (var in variables) {
+  contingency_table <- table(data_train[[var]], data_train$TARGET_FLAG)
+  test_result <- chisq.test(contingency_table)
+  
+  results <- rbind(results, data.frame(Variable = var,
+                                       Chi_Squared = test_result$statistic,
+                                       DF = test_result$parameter,
+                                       P_Value = test_result$p.value))
+}
+
+print(results)
+```
+
+The table above shows that PARENT1, MSTATUS, CAR_USE, RED_CAR, REVOKED, and URBANICITY are statistically significant to TARGET_FLAG. SEX has a p-value of 0.0608 suggesting there is not a significant association between SEX and TARGET_FLAG. 
+
+Since we changed some columns to continuous variables, let's do another correlation plot but with just the continuous variables.
+
+```{r}
+# Identify continuous and binary variables
+continuous_vars <- data_train %>% 
+  select_if(is.numeric) %>%
+  select_if(~sum(. %in% 0:1) != length(.))
+
+binary_vars <- data_train %>% 
+  select_if(is.numeric) %>%
+  select_if(~sum(. %in% 0:1) == length(.))
+
+# Compute correlation matrix for continuous variables
+correlation_matrix <- cor(continuous_vars, use = "complete.obs")
+
+# Create correlation plot
+corrplot(correlation_matrix, method = "color", tl.col = "black", addCoef.col = "black", number.cex = 0.5) 
+```
+
+There does not seem to be any predictors that have a strong linear correlation with TARGET_AMT. MVR_PTS (0.14), CLM_FREQ(0.12), and OLDCLAIM(0.08) seem to have the highest correlation among the continuous predictors. 
+
+# 3. Build Models
+
+#### Model 1
+Let's build a model using the variables CLM_FREQ, KIDSDRIV, CAR_AGE, and HOMEKIDS, as they showed higher correlations with the target variable during the correlation analysis.
+
+```{r}
+lm_model <- lm(TARGET_AMT ~ CLM_FREQ + KIDSDRIV + CAR_AGE + HOMEKIDS + MVR_PTS + AGE, data = data_train)
+
+summary(lm_model)
+```
+Now let's do a stepwise model where the algorithm chooses the best subset of predictors based on a specified criterion, such as the Akaike Information Criterion (AIC) or Bayesian Information Criterion (BIC).
+
+```{r}
+stepwise_model <- step(lm_model, direction = "both", trace = 0)
+
+summary(stepwise_model)
+```
+lm_model (with AGE, Model 1):
+
+Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS are all significant (p < 0.05), impacting TARGET_AMT significantly.
+AGE coefficient is not significant (p = 0.432), suggesting no linear relationship with TARGET_AMT.
+Adjusted R-squared: 0.02885, explaining about 2.9% of variance in TARGET_AMT.
+stepwise_model (without AGE, Model 2):
+
+Coefficients for CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS remain significant.
+Removing AGE didn't affect other coefficients significantly.
+Adjusted R-squared: 0.0289, slightly lower than Model 1.
+Comparing both, they share significant predictors, and removing AGE didn't alter coefficients much. Hence, Model 2, simpler yet potent, might be preferable. Regarding coefficients, CLM_FREQ, KIDSDRIV, CAR_AGE, HOMEKIDS, and MVR_PTS positively correlate with TARGET_AMT, aligning with expectations.
+
+
+#### Model 2
+First, we are going to create a binary logistic regression model to predict the probability that a person will crash their car. Based on the model 1, we can see that CLM_FREQ, MVR_PTS, and KIDSDRIV have the lowest p-value and are significant predictors of TARGET_FLAG. Also, we will use MSTATUS, CAR_USE, and REVOKED since they were all showed statistical significance with TARGET_FLAG in the chi-squared test. And, intuitively, these binary variables increase the probability of a car crash.
+
+```{r}
+model2 <- glm(TARGET_FLAG ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE  + REVOKED, 
+             data = data_train, family = binomial)
+
+summary(model2)
+```
+
+This model shows that all the predictor variables are statistically significant. The AIC for the model is 8446.7. Next, let's use the stepAIC function to improve this model.
+
+```{r}
+step_model <- stepAIC(model2, direction = "both", trace = FALSE)
+summary(step_model)
+```
+
+After using a stepwise selection process on model2, the results, specifically the AIC, are identical. This indicates that adding or removing predictors did not improve the original model. Again, all of the predictors have a p-value less than, 0.05 indicating they are statistically significant in predicting TARGET_FLAG. The intercept when the predictors are zero is -1.644. For the coefficients, a one unit increase in CLM_FREQ or claims processed corresponds to an increases of 0.264 in the log-odds of car crashes. All the coefficients seem to cause a positive increase in log-odds of car crashes except for CAR_USE. When CAR_USE is 1 (private vehicle), the log odds of a car crash is expected to decrease by 0.60461 compared to commercial car use. Intuitively, this makes sense as one would expect commercial vehicles to be involved more car crashes than private vehicles. The predictor REVOKED seems to cause the highest increase in log odds of car crash at 0.85418. This makes sense as you would expect someone who has had their license revoked be in a car crash. One coefficient estimate that does not seem to make sense is MSTATUS as one would expect married people to be safer drivers and be involved in less crashes. However, the model predicts that individuals who are not married are expected to increase log odds of a car crash by 0.582 compared to individuals who are married. 
+
+Next, let's create a multiple linear regression model to predict the amount of money it will cost if the person does crash their car. We will use the same predictors as before with the binary model since they were all statistically significant in predicting TARGET_FLAG. 
+
+```{r}
+model2_linear <- lm(TARGET_AMT ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE + REVOKED, data = data_train)
+
+summary(model2_linear)
+```
+
+Like the binary model, all of the coefficients in this multiple linear regression model have a p-value less than 0.05, indicating they are statistically significant. The intercept is 1740.8, which means that when all predictor variables are zero the expect cost of a car crash is $1740.8. When MSTATUS and CAR_USE changes from 0 to 1, this causes a decrease of 737.74 and 824.24 in cost of the car crash. This makes sense as married people generally drive safer and private vehicles are not driven as often as commercial vehicles. All of the other coefficients drive the cost of car crashes up with a one unit increase. 
+
+Overall, the p-value for the model is less than 0.05, indicating it is statistically significant in predicting TARGET_AMT. However, the R-squared for this model is 0.04134, suggesting that only 4% of the variability in TARGET_AMT can be explained by the model. Although this is very low, it is higher than the R-squared of the first model(0.02). Therefore, it may be advisable to retain the model for further analysis and refinement.
+
+```{r}
+# Fit weighted least squares to address heteroscedasticity
+wls_model <- lm(TARGET_AMT ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE, data = data_train, weights = 1/abs(resid(model2_linear))^2)
+summary(wls_model)
+
+```
+
+LOGISTIC REGRESSIONS
+MODEL 2 manually selected variables based on domain knowledge, focusing on factors expected to have a significant impact on the likelihood of car crashes. Also, incorporated a weighted loss function to address class imbalance. By assigning a higher weight to the minority class (TARGET_FLAG = 1), I give more importance to correctly predicting instances of car crashes, thereby mitigating the impact of class imbalance.
+
+The negative coefficient associated with age suggests that older drivers are less likely to be involved in car crashes, aligning with the common understanding that age correlates with driving experience and caution. Surprisingly, commercial vehicle use is associated with a lower probability of car crashes, contrary to expectations. However, this could be attributed to differences in driving behavior or regulations for commercial vehicles. The positive coefficients for variables such as CLM_FREQ and MVR_PTS indicate that individuals with a history of claims and traffic violations are more likely to be involved in car crashes, reflecting risky driving behavior. Interestingly, the coefficient for HOME_VAL, while statistically significant due to the large sample size, has a negligible practical significance. Overall, the model captures meaningful relationships between variables and the likelihood of car crashes, despite some counterintuitive coefficients.
+
+```{r}
+# Model 2: Manual Variable Selection with Weighted Loss Function
+model_glm1 <- glm(TARGET_FLAG ~ AGE + CAR_USE + CLM_FREQ + MVR_PTS + HOME_VAL, data = data_train, family = "binomial", weights = ifelse(data_train$TARGET_FLAG == 1, 3, 1))
+summary(model_glm1)
+
+
+```
+
+#### Model 3
+I chose a subset of variables based on expert knowledge and relevance to the task. This approach allowed to include only the most important predictors while reducing the risk of overfitting. Class imbalance was handled by undersampling the majority class (TARGET_FLAG = 0). This technique reduces the dominance of the majority class in the training data, making the model less biased towards predicting the majority class and improving its ability to capture patterns in the minority class.
+
+he negative coefficient for CAR_AGE suggests that older vehicles are associated with a lower probability of accidents, possibly due to better safety features and maintenance. Similar to Model 2, commercial vehicle use is linked to a reduced likelihood of car crashes, which may be attributed to differences in driving behavior or regulations. Consistent with Model 2, variables such as CLM_FREQ and MVR_PTS exhibit positive coefficients, indicating that a history of claims and traffic violations increases the probability of car crashes. Additionally, the coefficients for variables such as SEX and REVOKED provide insights into demographic and regulatory factors influencing driving behavior and accident risk. Despite potential counterintuitive findings, the model retains its predictive power and relevance for the task at hand.
+
+```{r}
+# Undersample the majority class
+set.seed(12) 
+train_undersampled <- ovun.sample(TARGET_FLAG ~ ., data = data_train, method = "under", N = 3500)$data
+
+# Model 3: Expert-Driven Selection with Undersampling
+model_glm3 <- glm(TARGET_FLAG ~ CAR_AGE + CAR_USE + CLM_FREQ + MVR_PTS + SEX + REVOKED, data = train_undersampled, family = "binomial")
+summary(model_glm3)
+
+
+```
+
+# 4. Select Models
+Preprocessing step used in training data for eval data
+```{r}
+data_eval$OLDCLAIM <- gsub("\\$|,", "", data_eval$OLDCLAIM)
+data_eval$HOME_VAL <- gsub("\\$|,", "", data_eval$HOME_VAL)
+data_eval$INCOME <- gsub("\\$|,", "", data_eval$INCOME)
+data_eval$BLUEBOOK <- gsub("\\$|,", "", data_eval$BLUEBOOK)
+
+#Converting the specified columns to numeric
+
+data_eval$OLDCLAIM <- as.numeric(data_eval$OLDCLAIM)
+data_eval$HOME_VAL <- as.numeric(data_eval$HOME_VAL)
+data_eval$INCOME <- as.numeric(data_eval$INCOME)
+data_eval$BLUEBOOK <- as.numeric(data_eval$BLUEBOOK)
+
+```
+
+```{r}
+fix_missing <- function(df) {
+  df %>% 
+    mutate_at(vars(c("CAR_AGE", "YOJ", "AGE", "INCOME", "HOME_VAL")), ~ifelse(. < 0, median(., na.rm = TRUE), .))
+}
+
+data_eval <- fix_missing(data_eval)
+
+```
+
+```{r}
+data_eval <- data_eval %>% 
+  mutate(PARENT1 = ifelse(PARENT1 == "Yes", 1, 0),
+         SEX = ifelse(SEX == "M", 1, 0),
+         MSTATUS = ifelse(MSTATUS == "Yes", 1, 0),
+         CAR_USE = ifelse(CAR_USE == "Private", 1, 0),
+         RED_CAR = ifelse(RED_CAR == "Yes", 1, 0),
+         REVOKED = ifelse(REVOKED == "Yes", 1, 0),
+         URBANICITY = ifelse(URBANICITY == "Urban", 1, 0))
+
+```
+
+##### MULTIPLE LINEAR REGRESSION
+```{r}
+
+# Predicting the target variable using Model 1
+predictions_model1 <- predict(lm_model, newdata = data_train)
+
+# Calculating Mean Squared Error (MSE) for Model 1
+mse_model1 <- mean((data_train$TARGET_AMT - predictions_model1)^2)
+print(paste("Multiple linear 1 - Mean Squared Error (MSE):", mse_model1))
+
+# Calculating R-squared (R2) for Model 1
+r_squared_model1 <- summary(lm_model)$r.squared
+print(paste("Multiple linear 1 - R-squared (R2):", r_squared_model1))
+
+# Extracting F-statistic for Model 1
+f_statistic_model1 <- summary(lm_model)$fstatistic[1]
+print(paste("Multiple linear 1 - F-statistic:", f_statistic_model1))
+
+# Calculate residuals for Model 1
+residuals_model1 <- residuals(lm_model)
+fitted_values_model1 <- fitted(lm_model)
+
+# Create a data frame for plotting
+residuals_df <- data.frame(Residuals = residuals_model1, Fitted_Values = fitted_values_model1)
+
+# Create the residual plot
+residual_plot_model1 <- ggplot(residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(shape = 21, size = 3, fill = "skyblue") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  
+  labs(title = "Residual Plot - Multiple linear 1", x = "Fitted Values", y = "Residuals") +  
+  theme_minimal() +  
+  theme(plot.title = element_text(hjust = 0.5),  
+        axis.title = element_text(size = 12),   
+        axis.text = element_text(size = 10))    
+
+# Display the residual plot for Model 1
+print(residual_plot_model1)
+
+```
+
+
+```{r}
+# Predicting the target variable using Model 2 (Stepwise Model)
+predictions_model2 <- predict(stepwise_model, newdata = data_train)
+
+# Calculating Mean Squared Error (MSE) for Model 2 (Stepwise Model)
+mse_model2 <- mean((data_train$TARGET_AMT - predictions_model2)^2)
+print(paste("Multiple linear 2 - Mean Squared Error (MSE):", mse_model2))
+
+# Calculating R-squared (R2) for Model 2 (Stepwise Model)
+r_squared_model2 <- summary(stepwise_model)$r.squared
+print(paste("Multiple linear 2 - R-squared (R2):", r_squared_model2))
+
+# Extracting F-statistic for Model 2 (Stepwise Model)
+f_statistic_model2 <- summary(stepwise_model)$fstatistic[1]
+print(paste("Multiple linear 2 - F-statistic:", f_statistic_model2))
+
+# Calculate residuals for Model 2
+residuals_model2 <- residuals(stepwise_model)
+fitted_values_model2 <- fitted(stepwise_model)
+
+# Create a data frame for plotting
+residuals_df <- data.frame(Residuals = residuals_model2, Fitted_Values = fitted_values_model2)
+
+# Create the residual plot
+residual_plot_model2 <- ggplot(residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(shape = 21, size = 3, fill = "skyblue") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  
+  labs(title = "Residual Plot - Multiple linear 2", x = "Fitted Values", y = "Residuals") +  
+  theme_minimal() +  
+  theme(plot.title = element_text(hjust = 0.5),  
+        axis.title = element_text(size = 12),   
+        axis.text = element_text(size = 10))    
+
+# Display the residual plot for Model 1
+print(residual_plot_model2)
+```
+
+Among the multiple linear regression models, Multiple linear 3 has the highest R-squared value (0.0413), indicating that it explains a slightly larger proportion of the variance in the dependent variable compared to the other models. Additionally, it has the highest F-statistic (58.563), suggesting that the overall model fit is better than the other models.
+Therefore, Multiple linear 3 would be the preferred linear regression model based on these metrics. However, the R-squared value of 0.0413 for Multiple linear 3 indicates that approximately 4.13% of the total variance in the dependent variable (TARGET_AMT) is explained by the independent variables included in the model which is very low. Hence, I decided to validate maodel assumptions in order to arrive to better results.
+
+```{r}
+# Predicting the target variable using Model 3
+predictions_model3 <- predict(model2_linear, newdata = data_train)
+
+# Calculating Mean Squared Error (MSE) for Model 2
+mse_model3 <- mean((data_train$TARGET_AMT - predictions_model3)^2)
+print(paste("Multiple linear 3 - Mean Squared Error (MSE):", mse_model3))
+
+# Calculating R-squared (R2) for Model 2
+r_squared_model3 <- summary(model2_linear)$r.squared
+print(paste("Multiple linear 3 - R-squared (R2):", r_squared_model3))
+
+# Extracting F-statistic for Model 2
+f_statistic_model3 <- summary(model2_linear)$fstatistic[1]
+print(paste("Multiple linear 3 - F-statistic:", f_statistic_model3))
+
+
+
+# Calculate residuals for Model 3
+residuals_model3 <- residuals(model2_linear)
+fitted_values_model3 <- fitted(model2_linear)
+
+# Create a data frame for plotting
+residuals_df <- data.frame(Residuals = residuals_model3, Fitted_Values = fitted_values_model3)
+
+# Create the residual plot
+residual_plot_model3 <- ggplot(residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(shape = 21, size = 3, fill = "skyblue") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  
+  labs(title = "Residual Plot - Multiple linear 3", x = "Fitted Values", y = "Residuals") +  
+  theme_minimal() +  
+  theme(plot.title = element_text(hjust = 0.5),  
+        axis.title = element_text(size = 12),   
+        axis.text = element_text(size = 10))    
+
+# Display the residual plot for Model 1
+print(residual_plot_model3)
+
+```
+
+By thoroughly validating the assumptions of the linear regression model and addressing any detected issues, such as multicollinearity, non-linearity, heteroscedasticity, and non-normality of residuals, the resulting model is likely to yield better and more reliable results. By ensuring that the model conforms to the underlying assumptions of linear regression, we increase our confidence in its predictive capabilities and the validity of the estimated coefficients. Addressing issues like multicollinearity helps to stabilize parameter estimates, while ensuring linearity and homoscedasticity enhances the model's ability to accurately capture the relationships between the predictor variables and the target variable. Furthermore, employing weighted least squares (WLS) to account for non-constant variance of residuals can improve the precision of parameter estimates and mitigate the impact of outliers.
+
+With all VIF values well below 10, it appears that multicollinearity is not a major issue in this model. Therefore, the predictor variables are likely contributing unique information to the regression model without substantial redundancy or overlap. 
+
+```{r}
+# Calculate VIFs
+vif_values <- car::vif(model2_linear)
+
+# Check VIF values
+vif_values
+```
+
+The residuals mostly follow the diagonal line, suggesting that the normality assumption is reasonably met, except for a few large positive residuals at the upper end showing potential outliers and a heavy-tailed residual distribution. 
+The histogram distribution is skewed to the right, with most residuals concentrated around zero but a few very large positive residuals. This confirms the presence of potential outliers and heavy tails in the residual distribution, deviating from the normality assumption.
+The residuals are randomly scattered around zero for most of the fitted values, but there are a few very large positive residuals at the upper end of the fitted values, hence, heteroscedasticity issues for those high fitted value ranges, violating the linearity and homoscedasticity assumptions.
+```{r}
+# Check for linearity
+plot(model2_linear, which = c(1, 2))
+
+# Check for normality of residuals
+hist(residuals(model2_linear))
+
+# Check for homoscedasticity
+plot(fitted(model2_linear), residuals(model2_linear))
+```
+
+IMPROVEMENT handling heteroscedasticity issues
+```{r}
+# Fit weighted least squares to address heteroscedasticity
+wls_model <- lm(TARGET_AMT ~ CLM_FREQ + MVR_PTS + KIDSDRIV + MSTATUS + CAR_USE,
+                data = data_train, weights = 1/abs(resid(model2_linear))^2)
+
+summary(wls_model)
+```
+
+IMPROVED MODEL RESULTS
+After fitting the WLS model, significant improvements were observed in various performance metrics. The R-squared value increased substantially to 0.9558, indicating that approximately 95.58% of the total variance in the target variable (TARGET_AMT) is explained by the independent variables in the model. Additionally, both the Mean Squared Error (MSE) and the F-statistic showed improvements, further confirming the enhanced predictive accuracy and goodness of fit of the WLS model compared to the original linear regression model.
+
+```{r}
+# Predicting the target variable using Model 4
+predictions_model4 <- predict(wls_model, newdata = data_train)
+
+# Calculating Mean Squared Error (MSE) for Model 4
+mse_model4 <- mean((data_train$TARGET_AMT - predictions_model4)^2)
+print(paste("Multiple linear 4 - Mean Squared Error (MSE):", mse_model4))
+
+# Calculating R-squared (R2) for Model 2
+r_squared_model4 <- summary(wls_model)$r.squared
+print(paste("Multiple linear 4 - R-squared (R2):", r_squared_model4))
+
+# Extracting F-statistic for Model 2
+f_statistic_model4 <- summary(wls_model)$fstatistic[1]
+print(paste("Multiple linear 4 - F-statistic:", f_statistic_model4))
+
+# Calculate residuals for Model 3
+residuals_model4 <- residuals(wls_model)
+fitted_values_model4 <- fitted(wls_model)
+
+# Create a data frame for plotting
+residuals_df <- data.frame(Residuals = residuals_model3, Fitted_Values = fitted_values_model4)
+
+# Create the residual plot
+residual_plot_model3 <- ggplot(residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(shape = 21, size = 3, fill = "skyblue") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  
+  labs(title = "Residual Plot - Multiple linear 4", x = "Fitted Values", y = "Residuals") +  
+  theme_minimal() +  
+  theme(plot.title = element_text(hjust = 0.5),  
+        axis.title = element_text(size = 12),   
+        axis.text = element_text(size = 10))    
+
+# Display the residual plot for Model 1
+print(residual_plot_model3)
+```
+
+
+#### LOGISTIC REGRESSION
+
+```{r}
+#LOGISTIC MODEL 1
+# Predicting the target variable using the binary logistic regression model
+logistic_predictions <- predict(step_model, newdata = data_train, type = "response")
+
+# Converting probabilities to binary predictions
+binary_predictions <- ifelse(logistic_predictions > 0.5, 1, 0)
+
+# Confusion matrix
+conf_matrix <- table(data_train$TARGET_FLAG, binary_predictions)
+
+# Displaying Confusion Matrix
+print("Logistic Model 1 Confusion Matrix:")
+print(conf_matrix)
+
+# Accuracy
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste("Logistic Model 1 Accuracy:", accuracy))
+
+# Classification Error Rate
+error_rate <- 1 - accuracy
+print(paste("Logistic Model 1 Classification Error Rate:", error_rate))
+
+# Confusion Matrix
+true_negatives <- 5690
+false_positives <- 1678
+false_negatives <- 317
+true_positives <- 470
+
+# Precision
+precision <- true_positives / (true_positives + false_positives)
+print(paste("Logistic Model 1 Precision:", precision))
+
+# Sensitivity (True Positive Rate)
+sensitivity <- true_positives / (true_positives + false_negatives)
+print(paste("Logistic Model 1 Sensitivity (True Positive Rate):", sensitivity))
+
+# Specificity (True Negative Rate)
+specificity <- conf_matrix[1, 1] / sum(conf_matrix[1, ])
+print(paste("Logistic Model 1 Specificity (True Negative Rate):", specificity))
+
+# F1 Score
+f1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)
+print(paste("Logistic Model 1 F1 Score:", f1_score))
+
+# Calculating AUC (Area Under the ROC Curve)
+roc_curve <- roc(data_train$TARGET_FLAG, logistic_predictions)
+auc <- auc(roc_curve)
+print(paste("Logistic Model 1 AUC (Area Under the ROC Curve):", auc))
+
+
+```
+
+
+```{r}
+#LOGISTIC MODEL 2
+# Predicting the target variable using the binary logistic regression model
+logistic_predictions <- predict(model_glm1, newdata = data_train, type = "response")
+
+# Converting probabilities to binary predictions
+binary_predictions <- ifelse(logistic_predictions > 0.5, 1, 0)
+
+# Confusion matrix
+conf_matrix <- table(data_train$TARGET_FLAG, binary_predictions)
+
+# Displaying Confusion Matrix
+print("Logistic Model 2 Confusion Matrix:")
+print(conf_matrix)
+
+# Accuracy
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste("Logistic Model 2 Accuracy:", accuracy))
+
+# Classification Error Rate
+error_rate <- 1 - accuracy
+print(paste("Logistic Model 2 Classification Error Rate:", error_rate))
+
+# Confusion Matrix
+true_negatives <- 3724
+false_positives <- 1941
+false_negatives <- 670
+true_positives <- 1358
+
+# Precision
+precision <- true_positives / (true_positives + false_positives)
+print(paste("Logistic Model 2 Precision:", precision))
+
+# Sensitivity (True Positive Rate)
+sensitivity <- true_positives / (true_positives + false_negatives)
+print(paste("Logistic Model 2 Sensitivity (True Positive Rate):", sensitivity))
+
+# Specificity (True Negative Rate)
+specificity <- conf_matrix[1, 1] / sum(conf_matrix[1, ])
+print(paste("Logistic Model 2 Specificity (True Negative Rate):", specificity))
+
+# F1 Score
+f1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)
+print(paste("Logistic Model 2 F1 Score:", f1_score))
+
+# Calculating AUC (Area Under the ROC Curve)
+roc_curve <- roc(data_train$TARGET_FLAG, logistic_predictions)
+auc <- auc(roc_curve)
+print(paste("Logistic Model 2 AUC (Area Under the ROC Curve):", auc))
+
+```
+
+Given the class imbalance issue, where the majority class (0) significantly outweighs the minority class (1), Logistic Model 1 may have the highest accuracy, it might not be the best choice due to its low sensitivity (True Positive Rate) and F1 Score.
+Logistic Model 1 has a sensitivity of only 0.597, indicating that it struggles to correctly classify instances of car crashes. This lower sensitivity suggests that Model 1 is biased towards predicting the majority class, leading to a higher number of false negatives the actual crashes incorrectly classified as non-crashes.
+On the other hand, Logistic Model 3 exhibits a higher sensitivity of 0.429, indicating a better ability to identify true positive cases of car crashes despite the class imbalance. Additionally, Model 3 demonstrates a higher F1 Score, which balances precision and sensitivity, making it more suitable for imbalanced this dataset.
+
+```{r}
+#LOGISTIC MODEL 3
+# Predicting the target variable using the binary logistic regression model
+logistic_predictions <- predict(model_glm3, newdata = data_train, type = "response")
+
+# Converting probabilities to binary predictions
+binary_predictions <- ifelse(logistic_predictions > 0.5, 1, 0)
+
+# Confusion matrix
+conf_matrix <- table(data_train$TARGET_FLAG, binary_predictions)
+
+# Displaying Confusion Matrix
+print("Logistic Model 3 Confusion Matrix:")
+print(conf_matrix)
+
+# Accuracy
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste("Logistic Model 3 Accuracy:", accuracy))
+
+# Classification Error Rate
+error_rate <- 1 - accuracy
+print(paste("Logistic Model 3 Classification Error Rate:", error_rate))
+
+# Confusion Matrix
+true_negatives <- 4039
+false_positives <- 803
+false_negatives <- 1600
+true_positives <- 1203
+
+# Precision
+precision <- true_positives / (true_positives + false_positives)
+print(paste("Logistic Model 3 Precision:", precision))
+
+# Sensitivity (True Positive Rate)
+sensitivity <- true_positives / (true_positives + false_negatives)
+print(paste("Logistic Model 3 Sensitivity (True Positive Rate):", sensitivity))
+
+# Specificity (True Negative Rate)
+specificity <- conf_matrix[1, 1] / sum(conf_matrix[1, ])
+print(paste("Logistic Model 3 Specificity (True Negative Rate):", specificity))
+
+# F1 Score
+f1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)
+print(paste("Logistic Model 3 F1 Score:", f1_score))
+
+# Calculating AUC (Area Under the ROC Curve)
+roc_curve <- roc(data_train$TARGET_FLAG, logistic_predictions)
+auc <- auc(roc_curve)
+print(paste("Logistic Model 3 AUC (Area Under the ROC Curve):", auc))
+```
+
+
+PREDICTIONS USING THE EVALUATION DATASET
+
+```{r}
+# Predict using Multiple Linear 4
+predictions_eval <- predict(wls_model, newdata = data_eval)
+
+# Display the first few predicted values
+head(predictions_eval)
+```
+
+
+```{r}
+# Predict using Logistic Model 3
+predictions_eval <- predict(model_glm3, newdata = data_eval, type = "response")
+
+# Convert predicted probabilities to binary predictions
+binary_predictions_eval <- ifelse(predictions_eval > 0.5, 1, 0)
+
+# Create a data frame to store the results
+evaluation_results <- data.frame(Actual = data_eval$TARGET_FLAG, Predicted = binary_predictions_eval)
+
+# Display the first few rows of the evaluation results
+head(evaluation_results)
+```
+
+# Appendix: Code for this assignment
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```

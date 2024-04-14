@@ -277,5 +277,5 @@ When model 3 was applied to the evaluation data, the RSME increased from 13.67 t
 
 # Appendix: Code for this assignment
 
-```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```{r ref.label=knitr::all_labels(), echo=FALSE, eval=FALSE}
 ```
