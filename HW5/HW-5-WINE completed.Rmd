@@ -1,0 +1,462 @@
+---
+title: "HW5 Wine"
+author: "Group 2 - Tilon Bobb, Jian Quan Chen, Frederick Jones"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+date: "2024-04-04"
+---
+
+```{r setup, include=FALSE}
+#rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(ggplot2)
+library(tidyr)  
+library(kableExtra)
+library(corrplot)
+library(skimr)
+library(dplyr)
+library(Hmisc)
+library(reshape2)
+library(tidyr)  
+library(MASS)
+library(psych)
+```
+
+### What is the number of cases of wine that will be sold given certain properties of the wine?
+
+```{r}
+train_wine <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW5/wine-training-data.csv')
+test_wine <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW5/wine-evaluation-data.csv')
+```
+
+```{r}
+head(train_wine)
+```
+
+# 1. Data Exploration
+
+First, we can use the glimpse() function to get a general sense of the training data. There are 12,795 rows and 16 columns in the dataset. All of the columns are measured as quantitative values. The column INDEX needs to be removed as it does not add any value to the dataset. The response variable is TARGET, which represents the number of sample cases of wine that were purchased by the wine distribution companies. The remaining 14 columsn are the predictor variables.
+
+```{r}
+glimpse(train_wine)
+```
+
+After removing the INDEX column, we can use the summary() and describe() function to summary statistics of the training dataset. We can see from the summary() function that there are several columns with missing values, which we will need to resolve later. The predictor STARS seems to have the most NAs at 3359. Some predictors also have a minimum that is negative, which does not make sense given the context so we will need to adjust these later on as well. Also, it looks like the STARS column consists of ordinal data.
+
+```{r}
+#Drop unnecessary variable INDEX
+train_wine <- train_wine[, -1]
+```
+
+```{r}
+# Summary statistics
+summary_stats <- summary(train_wine)
+print(summary_stats)
+```
+
+```{r}
+print(round(describe(train_wine),2))
+```
+
+Since the STAR column is an ordinal categorical variable we can transform it into a factor.
+```{r}
+#Transform STAR rating to a factor variables
+#Check the unique values in the STARS variable
+unique(train_wine$STARS)
+
+# Convert "STARS" to factor
+train_wine$STARS <- as.factor(train_wine$STARS)
+
+# Verify the transformation
+str(train_wine)
+```
+
+### Distribution plot
+
+To get a better sense of the distribution of the columns, we can plot a histogram of them. The target variable "TARGET" (number of cases sold) has a right-skewed distribution, with most values concentrated towards lower counts. Some predictor variables like FixedAcidity, VolatileAcidity, and CitricAcid appear to have relatively normal distributions. Other variables like ResidualSugar, Chlorides, FreeSulfurDioxide, and TotalSulfurDioxide show skewed distributions with potential outliers. The continuous variables seem to have varying levels of dispersion, which could impact their predictive power.
+
+```{r}
+# Visualization - Histograms for numerical variables
+num_vars <- names(train_wine)[sapply(train_wine, is.numeric)]
+par(mfrow = c(3, 5)) # Adjust layout for multiple plots
+for (var in num_vars) {
+  hist(train_wine[[var]], main = var, xlab = var, col = "skyblue")
+}
+```
+
+For the STAR ratings, which represents wine quality, we can use a bar plot to show the distribution. In this case, the bar plot shows that the STAR ratings are heavily skewed towards the higher end (2 and 3 stars).
+
+```{r}
+# Create bar plot for STARS variable
+barplot(table(train_wine$STARS), 
+        main = "Distribution of Star Ratings", 
+        col = "skyblue", 
+        xlab = "Star Rating", 
+        ylab = "Frequency")
+```
+
+### Boxplot
+
+We can also use boxplots to look at distribution and identify quartiles and outliers. Similar to the density plot, we see that the median for the amount of cases bought(TARGET) is at 3.
+
+```{r}
+# Boxplots for numerical variables to check outliers
+par(mfrow = c(2, 4))
+for (var in num_vars) {
+  boxplot(train_wine[[var]], main = var, col = "skyblue")
+}
+```
+
+```{r}
+train_wine1 <- train_wine
+```
+
+
+*NOT SURE ABOUT THIS... REMOVING A LOT OF THE DATA SET*
+
+```{r eval=FALSE, include=FALSE}
+# Function to remove outliers using IQR method
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  Q1 <- qnt[1]
+  Q3 <- qnt[2]
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  x[x < lower_bound | x > upper_bound] <- NA
+  return(x)
+}
+
+# Apply the function to numeric variables
+train_wine[, num_vars] <- lapply(train_wine[, num_vars], remove_outliers)
+
+# Check the updated dataset
+summary(train_wine)
+```
+
+### Correlation Plot
+
+The heatmap shows the correlation between numerical variables. The target variable "TARGET" has relatively low correlations with most predictors, except for LabelAppeal and AcidIndex, which show moderate positive correlations. Some predictors like Alcohol, pH, and Density exhibit moderate to high correlations with each other, indicating potential multicollinearity issues.
+
+```{r}
+num_data <- train_wine[, sapply(train_wine, is.numeric)]
+# Impute missing values with the median
+num_data <- apply(num_data, 2, function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
+
+
+# Compute correlation matrix
+correlation_matrix <- cor(num_data)
+
+# Convert correlation matrix to long format
+correlation_df <- reshape2::melt(correlation_matrix)
+
+# Create heatmap using ggplot2
+ggplot(correlation_df, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "black", mid = "white", high = "skyblue", midpoint = 0,
+                       breaks = c(seq(-1, 0, by = 0.2), seq(0, 1, by = 0.2)),
+                       limits = c(-1, 1),
+                       name = "Correlation",
+                       guide = guide_colorbar(direction = "vertical")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "right") +
+  labs(title = "Correlation Heatmap of Numerical Variables",
+       x = "Variables",
+       y = "Variables")
+
+```
+
+# 2. Data Preparation
+
+Let's prepare the data for modeling by identifying the columns that have missing values and negative values.
+
+```{r}
+# Function to count NA values in each column
+count_na <- function(df) {
+  sapply(names(df), function(col_name) {
+    result <- sum(is.na(df[[col_name]]))
+  })
+}
+
+# Count NA values
+print('Count of NAs:')
+count_na(train_wine)
+```
+
+```{r}
+# Function to count negative values in each column
+count_negative <- function(df) {
+  sapply(names(df), function(col_name) {
+    result <- sum(df[[col_name]] < 0)
+  })
+}
+
+# Count negative values
+print('Count of negative values:')
+count_negative(train_wine)
+```
+
+Some of the columns contain NA values such as pH, residual sugar, chlorides, and upon printing the unique values of the pH column, the column doesn't contain a 0, which represents an acidic kind of wine, so I will be replacing the NA values in the pH column with 0.
+
+```{r}
+train_wine$pH[is.na(train_wine$pH)] <- 0
+```
+
+The Residual sugar column contains negative values which doesn't make sense in the context of the amount of residual sugar in wine, so we will replace those values with the median, I will do the same for the chloride, Sulphates, totalSulfurDioxide,Alcohol and FreeSulfurDioxide column for the same logical reasoning.
+
+```{r}
+non_negative_median <- median(train_wine$ResidualSugar[train_wine$ResidualSugar >= 0], na.rm = TRUE)
+non_negative_median2 <- median(train_wine$Chlorides[train_wine$Chlorides >= 0], na.rm = TRUE)
+non_negative_median3 <- median(train_wine$FreeSulfurDioxide[train_wine$FreeSulfurDioxide >= 0], na.rm = TRUE)
+non_negative_median4 <- median(train_wine$TotalSulfurDioxide[train_wine$TotalSulfurDioxide >= 0], na.rm = TRUE)
+non_negative_median5 <- median(train_wine$Sulphates[train_wine$Sulphates >= 0], na.rm = TRUE)
+non_negative_median6 <- median(train_wine$Alcohol[train_wine$Alcohol >= 0], na.rm = TRUE)
+
+train_wine$ResidualSugar[train_wine$ResidualSugar < 0] <- non_negative_median
+train_wine$Chlorides[train_wine$Chlorides < 0] <- non_negative_median2
+train_wine$FreeSulfurDioxide[train_wine$FreeSulfurDioxide < 0] <- non_negative_median3
+train_wine$TotalSulfurDioxide[train_wine$TotalSulfurDioxide < 0] <- non_negative_median4
+train_wine$Sulphates[train_wine$Sulphates < 0] <- non_negative_median5
+train_wine$Alcohol[train_wine$Alcohol < 0] <- non_negative_median6
+```
+
+Other columns contain the value 0, so the NA values may actually be predictive of the target variable, with that being said, the other columns that contain NA values will contain flags to help inform the model about the presence of missing data, enabling it to discern potential patterns or relationships between missingness and the target variable.
+
+```{r}
+train_wine$ResidualSugar_missing <- ifelse(is.na(train_wine$ResidualSugar), 1, 0)
+train_wine$TotalSulfurDioxide_missing <- ifelse(is.na(train_wine$TotalSulfurDioxide), 1, 0)
+train_wine$Chlorides_missing <- ifelse(is.na(train_wine$Chlorides), 1, 0)
+train_wine$FreeSulfurDioxide_missing <- ifelse(is.na(train_wine$FreeSulfurDioxide), 1, 0)
+train_wine$Sulphates_missing <- ifelse(is.na(train_wine$Sulphates), 1, 0)
+train_wine$Alcohol_missing <- ifelse(is.na(train_wine$Alcohol), 1, 0)
+
+## Everything else that is na will be replaced with the median
+for (col in names(train_wine)) {
+  train_wine[is.na(train_wine[, col]), col] <- mean(train_wine[, col], na.rm = TRUE)
+}
+
+glimpse(train_wine)
+```
+
+```{r}
+# Count NA values
+print('Count of NAs:')
+count_na(train_wine)
+```
+
+
+```{r}
+# Normalize/Standardize numerical features
+train_wine_scaled <- as.data.frame(scale(train_wine[, num_vars]))
+
+head(train_wine_scaled)
+```
+
+# 3. Build Models
+
+### Model 1(Poisson)
+
+I'll be using the variables I believe will have the strongest fit based off of the correlation plot values for the Poisson regression model
+
+```{r}
+wine <- lm(TARGET ~ LabelAppeal + STARS + Alcohol, 
+             data = train_wine,
+            family = poisson)
+
+summary(wine)
+```
+
+The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 21.8% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
+
+### Model 2(Test 3)
+
+I began by fitting three different models to the training data: Poisson regression, Negative Binomial regression, and Multiple Linear Regression. Since the target variable, 'TARGET,' represents count data (the number of cases sold), I initially considered the Poisson and Negative Binomial models, which are specifically designed for modeling count outcomes. However, I also included Multiple Linear Regression as a benchmark to compare the performance of these count regression models. To evaluate and select the best model, I used the Akaike Information Criterion (AIC). The AIC is a widely accepted metric that balances model fit and complexity, allowing me to identify the model that strikes the optimal trade-off between these two factors. After calculating the AIC for each model, I found that the Multiple Linear Regression model had the lowest AIC value, suggesting it as the best-performing model for this dataset.
+
+```{r}
+# Poisson Regression
+poisson_model <- glm(TARGET ~ ., data = train_wine, family = "poisson")
+
+# Negative Binomial Regression
+nb_model <- glm.nb(TARGET ~ ., data = train_wine)
+
+# Multiple Linear Regression (as a benchmark)
+linear_model <- lm(TARGET ~ ., data = train_wine)
+
+# Model Selection
+cat("\n********** Poisson Model **********\n")
+summary(poisson_model)
+
+cat("\n********** Negative Binomial Regression **********\n")
+summary(nb_model)
+
+cat("\n********** Multiple Linear Regression **********\n")
+summary(linear_model)
+```
+
+
+*AIC Values*
+```{r}
+# Evaluate Models
+poisson_aic <- AIC(poisson_model)
+nb_aic <- AIC(nb_model)
+linear_aic <- AIC(linear_model)
+
+# Print AIC values
+
+cat("Poisson Regression AIC:", poisson_aic, "\n")
+cat("Negative Binomial Regression AIC:", nb_aic, "\n")
+cat("Multiple Linear Regression AIC:", linear_aic, "\n")
+```
+
+Despite the Linear Regression model's strong performance, I recognized its potential limitations in handling count data. Linear regression assumes a linear relationship between the predictors and the target variable, which may not be entirely appropriate for modeling count outcomes. Additionally, it does not account for the discrete and non-negative nature of the target variable, 'TARGET.'
+
+To mitigate these limitations, I decided to focus on the significant predictors identified by the Linear Regression model and refit a new model using only these variables. By doing so, I aimed to create a more parsimonious model that retained the essential predictors while reducing the potential noise from irrelevant variables.
+
+```{r}
+# Select the Best Model based on AIC
+best_model <- which.min(c(poisson_aic, nb_aic, linear_aic))
+
+# Print the selected model
+cat("Best Model:", switch(best_model,
+                          "1" = "Poisson Regression",
+                          "2" = "Negative Binomial Regression",
+                          "3" = "Multiple Linear Regression"),
+    "\n")
+
+summary(linear_model)
+```
+
+The refitted Linear Regression model, which included only the significant predictors, showed a slightly higher R-squared value compared to the original model. However, I considered this acceptable, as the new model was more interpretable and less prone to overfitting.
+
+Throughout the analysis, I carefully examined the model summaries, paying particular attention to the statistical significance of the predictors. Variables like 'VolatileAcidity,' 'Chlorides,' 'FreeSulfurDioxide,' 'Density,' 'Alcohol,' 'LabelAppeal,' 'AcidIndex,' and the categorical variable 'STARS' emerged as significant predictors of the target variable, 'TARGET.'
+
+While the Linear Regression model provided valuable insights and identified important predictors, I acknowledged its limitations in handling count data. Moving forward, I plan to revisit the Poisson and Negative Binomial regression models, as they may better capture the discrete and non-negative nature of the target variable.
+
+```{r}
+significant_vars <- c("STARS", "LabelAppeal", "AcidIndex", 
+                      "FixedAcidity", "VolatileAcidity", "ResidualSugar", "Chlorides", 
+                      "FreeSulfurDioxide", "Density", "Alcohol")
+
+# Refit the model using only significant variables
+lm_significant <- lm(TARGET ~ ., data = train_wine[, c(significant_vars, "TARGET")])
+
+# Summary of the new model
+summary(lm_significant)
+```
+
+Using Stepwise regression
+
+```{r}
+stepwise_model <- step(lm_significant, direction = "both", trace = 0)
+
+summary(stepwise_model)
+```
+
+Finally, I applied the step() function to the lm_significant model, with the direction = "both" argument, which allows the function to both add and remove predictors from the model. The trace = 0 argument suppresses the step-by-step output of the algorithm.
+
+The stepwise_model contains the final model obtained after the stepwise regression process. The summary of this model is displayed, which shows the following: The model includes the same predictors as the lm_significant model, except for FixedAcidity, which has been removed by the stepwise algorithm. The coefficients, standard errors, t-values, and p-values for the remaining predictors are provided. The residual standard error and R-squared values are similar to the lm_significant model.
+
+The advantage of using stepwise regression was that it provides an automated method for selecting the most relevant predictors and removing redundant predictors from the model. Thus improved the model's interpretability, reducing overfitting, and enhancing its predictive performance.
+
+### Model 3 (Poisson)
+
+For this poisson model, instead of using variables that were statistically significant to the response variable, I am going to use the variables that had the highest coefficient from the previous poisson model. These variables were STARS, LabelAppeal, and Density. These variables had the largest effect on the response variable. 
+
+```{r}
+# Poisson Regression with selected variables
+poisson_model_selected <- glm(TARGET ~ STARS + LabelAppeal + Density, data = train_wine, family = "poisson")
+
+summary(poisson_model_selected)
+```
+In this poisson model, the intercept when all the predictors are zero is 1.34. For the coefficients, the coefficient for STARS2 is 0.330709, which means that the log count of the TARGET is expected to increase by 0.330709 when the wine has 2 stars. STARS3 and STARS4 have a coefficienet estimate of 0.45 and 0.56, respectively. This suggests that as the high STAR rated wines cause a higher increase in the cases of wine sold. The LabelAppeal coefficient is 0.18 so a one unit increase in LabelAppeal will cause a log change of 0.18 in the TARGET. In comparison, a one unit increase in Density, causes a log decrease of 0.36 in the TARGET. Like before, the STARS and LabelAppeal variable are statistically significant while the density variable is not with a p-value of 0.076. 
+
+Theoretically speaking, the STARS and LabelAppeal coefficients make sense since the rating and look of the wine should increase the amount of cases that are purchased. However, it is hard to gauge how density impacts the response variable. It seems that in all of the models we've done so far, an increase in density seems to cause a decrease in the units purchased.
+
+The model’s AIC is 33952, which is higher than the AIC of the previous model (33850.11) when we used all of the response variables. The residual deviance is quite large at 5849.3, suggesting that there may be room for improvement in the model. We can also check if the poisson model is a good fit for the data by looking at the mean and variance to get check for dispersion.      
+
+```{r}
+# Calculate the mean of the TARGET variable
+mean_target <- mean(train_wine$TARGET, na.rm = TRUE)
+
+# Calculate the variance of the TARGET variable
+var_target <- var(train_wine$TARGET, na.rm = TRUE)
+
+# Print the mean and variance
+print(paste("Mean of TARGET: ", mean_target))
+print(paste("Variance of TARGET: ", var_target))
+```
+
+In a poisson distribution, one of the assumptions is that the mean and variance are exactly equal. However, the mean and variance of the TARGET variable is relatively close but not equal. Since the variance is slightly greater than the mean, this could indicate overdispersion, which can suggest that a negative binomial regression model might be a better fit for this data.
+
+### Model 3 (Negative Binomial Regression)
+
+For this negative binomial regression model, we are going to use the same predictors as the previous poisson model. This is because the response variable had a variance greater than the mean suggesting overdispersion. 
+
+```{r}
+nb_model3 <- glm.nb(TARGET ~ STARS + LabelAppeal + Density, data = train_wine)
+
+summary(nb_model3)
+```
+
+The results of Negative Binomial regression model are similar to those of the poisson model. As before, the coefficients STARS and LabelAppeal are all statistically significant. The dispersion parameter for the Negative Binomial model is 136299.6, which is significantly larger than 1, indicating overdispersion in the data. However, since the difference in mean and variance is roughly equal to each other, this might be the reason why the results are very similar in the poisson and negative binomial models. 
+
+The AIC is 33955, which is a bit higher than that of the poisson model (33952). Since these results are almost the same, let's add another input into the model. I chose the variable AcidIndex since it showed statistical significance in the previous negative binomial regression model with all the predictor variables and removed the density variable. 
+
+```{r}
+nb_model3a <- glm.nb(TARGET ~ STARS + LabelAppeal + AcidIndex, data = train_wine)
+
+summary(nb_model3a)
+```
+
+Looking at the coefficients, like in other models, a one unit increase in the STARS rating causes a log increase in the TARGET variable. Again, the coefficients STARS and LabelAppeal are statistically significant. The new predictor variable added, AcidIndex, has a coefficient of -0.048 which means a one unit increase in AcidIndex will cause a log decrease of 0.048 in the TARGET variable. This seems to correspond to the results of the other model since the coefficient of AcidIndex has been negative in all the models we've done so far. The p-value of AcidIndex is also less than 0.05 indicating it is statistically significant. 
+
+The AIC here is 33854, slightly lower than the previous binomial regression model (33955). The addition of AcidIndex as a predictor has improved the model fit, as indicated by the decrease in AIC. 
+
+### Model 3 (Multiple Linear Regression)
+
+For this multiple linear regression model, we are going to use the variables that statistically significant after using the step() function. These variables are STARS, LabelAppeal, AcidIndex, VolatileAcidity, Chlorides, and Alcohol.
+
+```{r}
+model3_linear <- lm(formula = TARGET ~ STARS + LabelAppeal + AcidIndex + VolatileAcidity + 
+    Chlorides + Alcohol, data = train_wine)
+
+summary(model3_linear)
+```
+
+```{r}
+# Assume 'model' is your fitted linear regression model
+aic_value <- AIC(model3_linear)
+print('AIC: ')
+print(aic_value)
+```
+
+
+For the coefficients, a unit increase in STARS causes an increase in the TARGET variable. A STAR rating of 4 has the largest impact on the response variable as a STAR rating of 4 causes an increase of 2.09 to the amount of cases of wine sold. LabelAppeal has a coefficient of 0.66, indicating an increase of 0.66 in the response variable for every single unit increase at LabelAppeal. These coefficients make sense as one would expect the cases of wine sold to increase as the wine has a better rating and the appeal of the wine is higher. For AcidIndex, VolatileAcidity, and Chlorides, increases in these variables has a negative impact on the TARGET variable. This seems to coincide with the other models where an increase in these variables causes a decrease in the response variable. All the coefficients  are statistically significant in predicting the TARGET variable.   
+
+The model's R-squared value is 0.4601, indicating that 46% of the variability in the TARGET variable can be explained by these predictors. The overall model has a p-value less than 0.05, indicating that it is statistically significant in predicting the amount of cases purchased. The R-squared is similar to the previous linear models so we can keep the model for now. Also, the AIC seems to be smaller than the AIC of the count regression models suggesting this multiple linear regression model may be a better fit for the data.   
+
+# 4. Select Models
+
+To select the best count regression model, we will first use the AIC to measure how well the model fits the data. Unlike metrics such as average squared error, AIC takes into account both the goodness of fit and the complexity of the model, helping to avoid overfitting. Model 2's poisson and negative binomial regression model had a AIC of 33850 and 33852, respectively. Model 3's poisson and negative binomial regression model had a AIC of 33952 and 33854, respectively. The AIC of all of these count regression models are pretty similar as they are within 1% of each other. Since this is the case, we can pick the model that is more parsimonious, which is model 3's negative binomial regression model. While the multiple linear regression models had a lower AIC than the count regression models, it may not be the best choice with count data like the TARGET variable. Also, the distribution of the TARGET variable was not normally distributed which violates the assumption of linear regression.  
+
+```{r}
+nb_model3a <- glm.nb(TARGET ~ STARS + LabelAppeal + AcidIndex, data = train_wine)
+
+summary(nb_model3a)
+```
+
+This Negative Binomial regression model looked at the three variables STARS, LabelAppeal, AcidIndex in relation to the response variable, TARGET. Since TARGET had a variance(3.7) that was greater than the mean(3.0), indicating overdispersion, it made sense that a negative binomial regression model would be more appropriate than using a poisson regression model. From the model, we can infer that the higher the STARS and LabelAppeal value, the higher the number of number of cases of wine purchased will be. On the other hand, an increase in AcidIndex seems to have a negative effect on the TARGET. This seems to correspond with the other models as well where an increase in the acidity of the wine lowers the number of cases of wine purchased. The model’s coefficients were statistically significant and aligned with our understanding of the relationships between the predictors and the TARGET variable.
+
+There were also 3359 observations that were deleted due to missingness, this was due to the missing values in the STAR column. Since most of the STAR ratings were either 2 or 3, we chose not to replace these NA values with the median or mean as it would create a bias in the data. Another take away from the results is that the residual deviance is less than the null deviance suggesting that the model is useful in predicting the response variable. 
+
+Next, let's deploy this negative on the test data set. 
+
+
+
+
