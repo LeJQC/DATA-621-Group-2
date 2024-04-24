@@ -457,6 +457,33 @@ There were also 3359 observations that were deleted due to missingness, this was
 
 Next, let's deploy this negative on the test data set. 
 
+```{r}
+glimpse(test_wine)
+```
 
+```{r}
+summary_stats <- summary(test_wine)
+print(summary_stats)
+```
+
+Since we transformed the STARS variable to a factor in training data set, we will do so with the test data set as well.
+
+```{r}
+unique(test_wine$STARS)
+
+# Convert "STARS" to factor
+test_wine$STARS <- as.factor(test_wine$STARS)
+
+# Verify the transformation
+str(test_wine$STARS)
+```
+Next, we use make predictions on the evaluation data set. 
+```{r}
+test_wine$pred <- predict(nb_model3a, type = "response", newdata = test_wine)
+```
+
+```{r}
+glimpse(test_wine)
+```
 
 
