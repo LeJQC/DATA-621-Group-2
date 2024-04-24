@@ -240,7 +240,7 @@ wine <- lm(TARGET ~ LabelAppeal + STARS + Alcohol,
 summary(wine)
 ```
 
-The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 21.8% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
+The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 43.09% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
 
 #### Model 1 (Multiple linear)
 
@@ -257,7 +257,7 @@ wine2 <- lm(TARGET ~ .,
 summary(wine2)
 ```
 
-We find that wines with more appealing labels (LabelAppeal) tend to exhibit a significant increase in expected sales, with each unit increase in label appeal corresponding to a 0.6511 increase in expected cases ordered, holding other variables constant. Similarly, wines with higher star ratings (STARS) demonstrate a substantial positive effect on sales, with each additional star rating leading to a 0.7462 increase in expected cases ordered. Additionally, the alcohol content (Alcohol) contributes positively to sales, although its effect size is relatively smaller compared to label appeal and star ratings, with each percentage point increase in alcohol content associated with a 0.0239 increase in expected cases ordered.
+We find that wines with more appealing labels (LabelAppeal) tend to exhibit a significant increase in expected sales, with each unit increase in label appeal corresponding to approximately a 0.6448 increase in expected cases ordered, holding other variables constant. Similarly, wines with higher star ratings (STARS) demonstrate a substantial positive effect on sales, with each additional star rating leading to approximately a 0.7462 increase in expected cases ordered. Additionally, the alcohol content (Alcohol) contributes positively to sales, although its effect size is relatively smaller compared to label appeal and star ratings, with each percentage point increase in alcohol content associated with approximately a 0.0236 increase in expected cases ordered.
 
 Using Stepwise regression
 
@@ -267,7 +267,7 @@ stepwise_model <- step(wine2, direction = "both", trace = 0)
 summary(stepwise_model)
 ```
 
-Based on the analysis, Model 2 (stepwise_model) appears to be preferable. It retains the significant predictors from Model 1 (lm_model), such as VolatileAcidity, CitricAcid, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, Density, Sulphates, Alcohol, LabelAppeal, AcidIndex, and STARS, while simplifying the model by removing the non-significant predictor Sulphates_missing. Additionally, the adjusted R-squared value of Model 2 is only slightly lower than that of Model 1 (0.2806 compared to 0.2813), suggesting that it still provides a good level of explanation for the variance in wine quality. Therefore, Model 2 offers a more parsimonious and efficient solution without sacrificing much predictive power, making it the better choice.
+Based on the analysis, Model 2 appears to be preferable. It retains significant predictors such as VolatileAcidity, ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, Density, Alcohol, LabelAppeal, AcidIndex, and STARS, while simplifying the model. Additionally, the adjusted R-squared value of Model 2 (0.4389) is only slightly lower than that of Model 1 (0.2813), suggesting that it still provides a good level of explanation for the variance in wine quality. Therefore, Model 2 offers a more parsimonious and efficient solution without sacrificing much predictive power, making it the better choice.
 
 #### Model 2(Test 3)
 
