@@ -25,7 +25,12 @@ library(MASS)
 library(psych)
 ```
 
-### What is the number of cases of wine that will be sold given certain properties of the wine?
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,warning = FALSE, message = FALSE)
+```
+
+# What is the number of cases of wine that will be sold given certain properties of the wine?
 
 ```{r}
 train_wine <- read.csv('https://raw.githubusercontent.com/LeJQC/DATA-621-Group-2/main/HW5/wine-training-data.csv')
@@ -114,8 +119,6 @@ for (var in num_vars) {
 train_wine1 <- train_wine
 ```
 
-
-*NOT SURE ABOUT THIS... REMOVING A LOT OF THE DATA SET*
 
 ```{r eval=FALSE, include=FALSE}
 # Function to remove outliers using IQR method
@@ -492,7 +495,7 @@ Next, let's deploy this negative on the test data set.
 glimpse(test_wine)
 ```
 
-Here is a some summary statistics on the evaluation set.
+Here are some summary statistics on the evaluation set.
 ```{r}
 summary_stats <- summary(test_wine)
 print(summary_stats)
@@ -518,4 +521,7 @@ test_wine$pred <- predict(nb_model3a, type = "response", newdata = test_wine)
 glimpse(test_wine)
 ```
 
+# Appendix: Code for this assignment
 
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```

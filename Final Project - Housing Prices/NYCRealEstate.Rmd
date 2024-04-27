@@ -3,6 +3,10 @@ title: "NYC RealEstate"
 author: "Fredrick Jones, Jian Quan Chen, Tilon Bobb"
 date: "2024-04-24"
 output:
+  pdf_document: 
+    toc: yes
+    toc_depth: '2'
+    latex_engine: xelatex
   html_document:
     theme: united
     highlight: tango
@@ -10,10 +14,6 @@ output:
     toc: yes
     toc_depth: 5
     toc_float: yes
-  pdf_document: 
-    toc: yes
-    toc_depth: '2'
-    latex_engine: xelatex
 editor_options: 
   markdown: 
     wrap: 72
