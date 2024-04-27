@@ -272,7 +272,34 @@ wine <- lm(TARGET ~ LabelAppeal + STARS + Alcohol,
 summary(wine)
 ```
 
-The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 21.8% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
+The Poisson regression model indicates that LabelAppeal, STARS, and Alcohol content significantly influence wine quality ratings. Higher LabelAppeal and STARS scores are associated with notable increases in wine quality ratings, while elevated Alcohol levels also contribute positively, although to a lesser extent. The model explains 43.09% of the variability in wine quality ratings and demonstrates overall statistical significance in predicting them. Therefore, these three factors play crucial roles in determining wine quality ratings.
+
+### Model 1 (Multiple linear)
+
+I'll be using all the variables for the multiple linear regression model
+
+```{r}
+#for (col in names(train_wine)) {
+#  train_wine[is.na(train_wine[, col]), col] <- median(train_wine[, col], na.rm = TRUE)
+#}
+
+wine2 <- lm(TARGET ~ ., 
+             data = train_wine)
+
+summary(wine2)
+```
+
+We find that wines with more appealing labels (LabelAppeal) tend to exhibit a significant increase in expected sales, with each unit increase in label appeal corresponding to approximately a 0.6448 increase in expected cases ordered, holding other variables constant. Similarly, wines with higher star ratings (STARS) demonstrate a substantial positive effect on sales, with each additional star rating leading to approximately a 0.7462 increase in expected cases ordered. Additionally, the alcohol content (Alcohol) contributes positively to sales, although its effect size is relatively smaller compared to label appeal and star ratings, with each percentage point increase in alcohol content associated with approximately a 0.0236 increase in expected cases ordered.
+
+Using Stepwise regression
+
+```{r}
+stepwise_model <- step(wine2, direction = "both", trace = 0)
+
+summary(stepwise_model)
+```
+
+Based on the analysis, Model 2 appears to be preferable. It retains significant predictors such as VolatileAcidity, ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, Density, Alcohol, LabelAppeal, AcidIndex, and STARS, while simplifying the model. Additionally, the adjusted R-squared value of Model 2 (0.4389) is only slightly lower than that of Model 1 (0.2813), suggesting that it still provides a good level of explanation for the variance in wine quality. Therefore, Model 2 offers a more parsimonious and efficient solution without sacrificing much predictive power, making it the better choice.
 
 ### Model 2(Test 3)
 
@@ -451,9 +478,13 @@ nb_model3a <- glm.nb(TARGET ~ STARS + LabelAppeal + AcidIndex, data = train_wine
 summary(nb_model3a)
 ```
 
-This Negative Binomial regression model looked at the three variables STARS, LabelAppeal, AcidIndex in relation to the response variable, TARGET. Since TARGET had a variance(3.7) that was greater than the mean(3.0), indicating overdispersion, it made sense that a negative binomial regression model would be more appropriate than using a poisson regression model. From the model, we can infer that the higher the STARS and LabelAppeal value, the higher the number of number of cases of wine purchased will be. On the other hand, an increase in AcidIndex seems to have a negative effect on the TARGET. This seems to correspond with the other models as well where an increase in the acidity of the wine lowers the number of cases of wine purchased. The model’s coefficients were statistically significant and aligned with our understanding of the relationships between the predictors and the TARGET variable.
+This Negative Binomial regression model looked at the three variables STARS, LabelAppeal, AcidIndex in relation to the response variable, TARGET. Since TARGET had a variance(3.7) that was greater than the mean(3.0), indicating overdispersion, it made sense that a negative binomial regression model would be more appropriate than using a poisson regression model. In addition, the observations are independent of each other so it meets the assumption of independence.   
+
+From the model, we can infer that the higher the STARS and LabelAppeal value, the higher the number of number of cases of wine purchased will be. On the other hand, an increase in AcidIndex seems to have a negative effect on the TARGET. This seems to correspond with the other models as well where an increase in the acidity of the wine lowers the number of cases of wine purchased. The model’s coefficients were statistically significant and aligned with our understanding of the relationships between the predictors and the TARGET variable.
 
 There were also 3359 observations that were deleted due to missingness, this was due to the missing values in the STAR column. Since most of the STAR ratings were either 2 or 3, we chose not to replace these NA values with the median or mean as it would create a bias in the data. Another take away from the results is that the residual deviance is less than the null deviance suggesting that the model is useful in predicting the response variable. 
+
+### Predictions using the evaluation data set
 
 Next, let's deploy this negative on the test data set. 
 
@@ -461,6 +492,7 @@ Next, let's deploy this negative on the test data set.
 glimpse(test_wine)
 ```
 
+Here is a some summary statistics on the evaluation set.
 ```{r}
 summary_stats <- summary(test_wine)
 print(summary_stats)
@@ -477,7 +509,7 @@ test_wine$STARS <- as.factor(test_wine$STARS)
 # Verify the transformation
 str(test_wine$STARS)
 ```
-Next, we use make predictions on the evaluation data set. 
+Next, we deploy our count regression model to make predictions on the evaluation data set. We saved the predictions under `pred`. Here is a glimpse of the data:
 ```{r}
 test_wine$pred <- predict(nb_model3a, type = "response", newdata = test_wine)
 ```
