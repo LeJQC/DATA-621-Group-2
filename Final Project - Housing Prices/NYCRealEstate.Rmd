@@ -19,9 +19,8 @@ editor_options:
     wrap: 72
 ---
 
-## Loading Required libraries
-
 ```{r setup, include=FALSE}
+## Loading Required libraries
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
 library(ggplot2)
@@ -65,7 +64,7 @@ The New York real estate market is one of the most dynamic and influential secto
 
 ### Background and Motivation
 
-The database under study contains a wealth of data spanning. two decades, providing a detailed chronicle of real estate transactions in the five boroughs of New York - Manhattan, the Bronx, Brooklyn, Queens and Staten Island. Our analysis is based on the foundation created by this dataset, which provides insight into the multifaceted dynamics of NYC real estate sales.
+The database under study contains a wealth of data spanning two decades, providing a detailed chronicle of real estate transactions in the five boroughs of New York - Manhattan, the Bronx, Brooklyn, Queens and Staten Island. Our analysis is based on the foundation created by this dataset, which provides insight into the multifaceted dynamics of NYC real estate sales.
 
 The motivation is to identify the factors that influence NYC real estate prices, so our research is based on a variety of analytical techniques. and methods. From data analysis to regression modeling, we seek to uncover the complex interplay of variables that affect real estate. By examining real estate sales trends, identifying key predictors of sales prices, and assessing the impact of factors such as property size, location, and tax bracket, we aim to shed light on the mechanics behind the NYC real estate world.
 
@@ -109,14 +108,18 @@ However, there may be some drawbacks to Gaynor's approach, such as:
 - Reliance on SQL and Tableau tools may limit accessibility for researchers unfamiliar with these technologies.
 - Lack of detailed explanation of data cleaning and preprocessing steps.
 
-## Regression Modelling Methodology
+## Regression Modeling Methodology
 
 ### Data Preparation
 
 The first part of our analysis consisted of importing the dataset that included data on property sales in New York City. After we uploaded the dataset, we conducted an exploratory data analysis to understand its organization, factors, and any problems that required attention.
+
 During the exploratory data analysis, we faced one of the first hurdles with the discovery of missing values in multiple columns. To tackle this problem, we methodically pinpointed the variables with incomplete data and assessed the percentage of missing values in each instance. After careful deliberation, we made the choice to eliminate data points containing incomplete information, as they comprised less than 5% of the entire data set. This method enabled us to keep a large part of the data while reducing the effect of missing values on future analyses.
+
 After addressing missing data, we focused on the distribution of numerical variables in the dataset. We noticed that many variables showed noticeable skewness, suggesting possible departures from normal distribution. To tackle this problem, we utilized Tukey's method for identifying and eliminating outliers. Our goal was to enhance the robustness of future analyses by improving the distributional properties of numeric variables through the identification and exclusion of outliers from the dataset.
+
 Additionally, we examined the connections between variables using correlation analysis. This included computing correlation coefficients for pairs of numerical variables in order to evaluate the magnitude and orientation of their relationships. During this examination, we found multiple variables that showed strong positive relationships with each other, along with variables that had weaker or negative relationships. These results offered valuable information on potential factors that could predict real estate prices and guided the choice of variables for inclusion in regression analysis.
+
 In addition, we analysed changes over time by graphing the time-based pattern of property values in New York City. This examination showed a rising pattern in mean sale prices over time, with variations in certain time frames. Through the visualization of time-based trends, we achieved a better comprehension of the fluctuations within the real estate market of New York City, pinpointing potential influences on property price fluctuations.
 
 
@@ -124,19 +127,19 @@ In addition, we analysed changes over time by graphing the time-based pattern of
 
 After completing thorough data preparation and exploratory analysis, we focused on the main objective of our research: using regression modelling to forecast real estate prices in New York City. The method we used involved carefully building linear regression models, using different predictor variables to understand the complex factors influencing real estate prices.
 Leading our regression modelling was the incorporation of important predictor variables that were considered to have a significant impact on real estate prices. These variables included a wide range of factors, each providing valuable perspectives on the intricate fabric of the New York City real estate market. Included in these predictors were the quantity of housing units in a property, offering an insight into its size and ability to house residents. The categorization of taxes for properties at various points highlighted their financial status and legal ramifications, revealing insights into the larger economic and legal environments in which these properties function.
+
 Furthermore, the year in which the building was constructed was identified as a crucial factor in predicting real estate values, giving a historical perspective on how they change over time. We aimed to capture temporal trends and identify any seasonal or cyclical patterns that could affect pricing dynamics by including the sale date of properties in our models. Moreover, factors like total area and land area were essential in evaluating the physical size and spatial characteristics of properties, enhancing our comprehension of their inherent value.
+
 By conducting thorough regression analysis, we discovered significant statistical connections between these predictor variables and property prices, revealing the complex interaction of factors that influence pricing decisions in the real estate market of New York City. Nevertheless, even though our models were strong, the adjusted R-squared values suggested that there might be additional variability that was not accounted for, indicating the presence of hidden factors that were not included in our analysis.
-
-
 
 ## Explorartory Data Analysis
 
 ### Loading Data
 
 ```{r}
-nyc_data <- read.csv("C:/Users/bobbt/OneDrive/Documents/azurework/nyc-property-sales.csv")
+nyc_data <- read.csv("C:/Users/Jian/Desktop/DATA 621 -Business Analytics and Data Mining/Final Project/nyc-property-sales.csv")
 
-head(nyc_data)
+#head(nyc_data)
 ```
 
 
@@ -165,7 +168,7 @@ clean_nyc <- na.omit(nyc_data)
 str(clean_nyc)
 ```
 
-All numeric variables are heavily skewed to the right,hence a clear indication of outliers
+All numeric variables are heavily skewed to the right, hence a clear indication of outliers
 
 All distributions exhibit a highly skewed pattern, with a single bar extending vertically at the rightmost end of the x-axis, suggesting the presence of potential outliers with extremely high unit counts.
 
@@ -175,13 +178,18 @@ numeric_vars <- c("RESIDENTIAL.UNITS", "COMMERCIAL.UNITS", "TOTAL.UNITS",
                   "LAND.SQUARE.FEET", "GROSS.SQUARE.FEET", "SALE.PRICE")
 
 
-num_data <-clean_nyc[, numeric_vars] 
+num_data <-clean_nyc[, numeric_vars]
+
+# Set up the plot layout
+par(mfrow = c(2, 3))
+
 for (i in 1:length(names(num_data))){
   print(i)
-  hist( num_data[i], main='hist', breaks=20, prob=TRUE)
+  hist(num_data[i], main='hist', breaks=20, prob=TRUE)
 }
 
-
+# Reset the plot layout to default
+par(mfrow = c(2, 3))
 ```
 
 ```{r}
